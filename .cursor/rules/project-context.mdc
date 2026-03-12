@@ -1,0 +1,43 @@
+---
+description: Contexto completo do projeto marmitaria — domínio, stack e arquitetura
+alwaysApply: true
+---
+
+# Projeto Marmitaria (Yao)
+
+Sistema CRUD para gerenciamento de marmitaria. Veja `AGENTS.md` para a documentação completa.
+
+## Stack
+- **Backend:** Python 3.12 + FastAPI
+- **Banco:** PostgreSQL 16 via psycopg2
+- **Pacotes:** UV (`uv sync` / `uv add`)
+- **Frontend:** a definir (stack ainda não decidida)
+- **Env:** Dev Container (Docker)
+
+## Entidades e tabelas
+
+| Classe | Tabela | Campos principais |
+|---|---|---|
+| `Cliente` | `clientes` | id, nome, numero |
+| `Pedido` | `pedidos` | id, cliente_id, tamanho(P/M/G), data, estado, valor, pago |
+| `Estoque` | `estoque` | id, quantidade_disponivel, valor_marmita |
+
+## Arquitetura
+```
+app/models/        → dataclasses / Pydantic
+app/repositories/  → SQL via psycopg2
+app/services/      → regras de negócio
+app/routers/       → endpoints FastAPI
+app/database.py    → conexão PostgreSQL
+app/main.py        → entrypoint
+frontend/          → a definir (stack ainda não decidida)
+```
+
+## Regras de negócio críticas
+- Não criar pedido se `estoque.quantidade_disponivel == 0`
+- `valor` do pedido = `estoque.valor_marmita` no momento da criação
+- Estado avança apenas em ordem: `EM_ANDAMENTO` → `PRONTO` → `ENTREGUE`
+- Não remover cliente com pedidos vinculados
+
+## CRUD obrigatório para cada entidade
+inserir, alterar, remover, buscar_por_nome, listar_todos, exibir_um
