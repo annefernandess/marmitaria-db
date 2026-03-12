@@ -1,0 +1,36 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainerFeatures.schema.json",
+  "name": "marmitaria-db",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "postCreateCommand": "bash .devcontainer/install-tools.sh && uv sync",
+
+  "postStartCommand": "bash .devcontainer/welcome.sh",
+
+  "containerEnv": {
+    "DATABASE_URL": "postgresql://postgres:postgres@db:5432/marmitaria"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg"
+      ]
+    }
+  },
+
+  "forwardPorts": [5432],
+  "portsAttributes": {
+    "5432": { "label": "PostgreSQL" }
+  }
+}

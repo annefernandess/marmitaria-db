@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# uv — ambiente virtual (não commitar, gerado por `uv sync`)
+.venv/
+
+# uv.lock DEVE ser commitado para garantir dependências idênticas no time
+# se quiser ignorar, descomente a linha abaixo:
+# uv.lock
