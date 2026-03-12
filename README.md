@@ -49,6 +49,117 @@ uv add nome-do-pacote
 
 ---
 
+## Banco de Dados
+
+### Diagrama Entidade-Relacionamento
+
+```mermaid
+erDiagram
+    clientes {
+        serial  id     PK
+        varchar nome
+        varchar numero
+    }
+
+    pedidos {
+        serial        id         PK
+        int           cliente_id FK
+        date          data
+        estado_pedido estado
+        numeric       valor
+        boolean       pago
+    }
+
+    pedido_itens {
+        serial id        PK
+        int    pedido_id FK
+        int    item_id   FK
+        int    quantidade
+    }
+
+    estoque {
+        serial  id                    PK
+        varchar item
+        int     quantidade_disponivel
+        numeric valor
+    }
+
+    clientes    ||--o{ pedidos      : "realiza"
+    pedidos     ||--|{ pedido_itens : "contém"
+    estoque     ||--o{ pedido_itens : "referenciado em"
+```
+
+### Tabelas
+
+#### `clientes`
+| Coluna | Tipo | Restrições |
+|--------|------|------------|
+| id | `SERIAL` | `PRIMARY KEY` |
+| nome | `VARCHAR(255)` | `NOT NULL` |
+| numero | `VARCHAR(20)` | `NOT NULL` |
+
+**Índice:** `idx_clientes_nome` em `nome` — para busca por nome.
+
+---
+
+#### `estoque`
+Cardápio de itens disponíveis na loja (Yao).
+
+| Coluna | Tipo | Restrições |
+|--------|------|------------|
+| id | `SERIAL` | `PRIMARY KEY` |
+| item | `VARCHAR(255)` | `NOT NULL` |
+| quantidade_disponivel | `INT` | `NOT NULL`, `>= 0` |
+| valor | `NUMERIC(10,2)` | `NOT NULL`, `> 0` |
+
+---
+
+#### `pedidos`
+| Coluna | Tipo | Restrições |
+|--------|------|------------|
+| id | `SERIAL` | `PRIMARY KEY` |
+| cliente_id | `INT` | `NOT NULL`, `FK → clientes(id)` |
+| data | `DATE` | `NOT NULL`, default `CURRENT_DATE` |
+| estado | `estado_pedido` | `NOT NULL`, default `'EM_ANDAMENTO'` |
+| valor | `NUMERIC(10,2)` | `NOT NULL`, default `0` |
+| pago | `BOOLEAN` | `NOT NULL`, default `false` |
+
+**Tipo ENUM `estado_pedido`:** `EM_ANDAMENTO` → `PRONTO` → `ENTREGUE`
+
+**Índices:** `idx_pedidos_cliente_id`, `idx_pedidos_estado`
+
+---
+
+#### `pedido_itens`
+Tabela de junção entre `pedidos` e `estoque` (relação N:N).
+Cada linha representa um item dentro de um pedido.
+
+| Coluna | Tipo | Restrições |
+|--------|------|------------|
+| id | `SERIAL` | `PRIMARY KEY` |
+| pedido_id | `INT` | `NOT NULL`, `FK → pedidos(id) ON DELETE CASCADE` |
+| item_id | `INT` | `NOT NULL`, `FK → estoque(id)` |
+| quantidade | `INT` | `NOT NULL`, `> 0`, default `1` |
+
+**Índices:** `idx_pedido_itens_pedido`, `idx_pedido_itens_item`
+
+> O `ON DELETE CASCADE` garante que ao remover um pedido, todos os seus itens são removidos automaticamente.
+
+---
+
+### Regras de negócio no banco
+
+| Regra | Implementação |
+|-------|--------------|
+| Estoque nunca negativo | `CHECK (quantidade_disponivel >= 0)` |
+| Valor do item sempre positivo | `CHECK (valor > 0)` |
+| Quantidade de item no pedido > 0 | `CHECK (quantidade > 0)` |
+| Estado do pedido restrito | `ENUM` com valores fixos |
+| Pedido sempre vinculado a um cliente | `NOT NULL REFERENCES clientes(id)` |
+| Itens orfãos removidos com o pedido | `ON DELETE CASCADE` em `pedido_itens` |
+
+---
+
 ## Modelagem — Diagrama UML de Classes
 
 ```mermaid
@@ -70,7 +181,6 @@ classDiagram
     class Pedido {
         +int id
         +int cliente_id
-        +TamanhoMarmita tamanho
         +date data
         +EstadoPedido estado
         +Decimal valor
@@ -86,20 +196,27 @@ classDiagram
         +marcar_pago()
     }
 
-    class Estoque {
+    class PedidoItem {
         +int id
-        +int quantidade_disponivel
-        +Decimal valor_marmita
-        +atualizar_quantidade(delta)
-        +atualizar_valor(valor)
-        +exibir()
+        +int pedido_id
+        +int item_id
+        +int quantidade
+        +inserir()
+        +remover()
+        +listar_por_pedido(pedido_id) List
     }
 
-    class TamanhoMarmita {
-        <<enumeration>>
-        P
-        M
-        G
+    class Estoque {
+        +int id
+        +str item
+        +int quantidade_disponivel
+        +Decimal valor
+        +inserir()
+        +alterar()
+        +remover()
+        +listar_todos() List
+        +exibir(id)
+        +atualizar_quantidade(delta)
     }
 
     class EstadoPedido {
@@ -116,9 +233,9 @@ classDiagram
     }
 
     Cliente "1" --> "0..*" Pedido : realiza
-    Pedido --> "1" TamanhoMarmita : tamanho
+    Pedido "1" --> "1..*" PedidoItem : contém
+    PedidoItem "0..*" --> "1" Estoque : referencia
     Pedido --> "1" EstadoPedido : estado
-    Pedido "0..*" ..> "1" Estoque : consome ao criar
     Cliente ..> Database : usa
     Pedido ..> Database : usa
     Estoque ..> Database : usa
@@ -130,7 +247,7 @@ classDiagram
 |---|---|---|
 | `Cliente` | `clientes` | Cadastro de clientes da marmitaria |
 | `Pedido` | `pedidos` | Pedidos realizados pelos clientes |
-| `Estoque` | `estoque` | Controle de marmitas disponíveis e preço (Yao) |
-| `TamanhoMarmita` | — | Enum: `P`, `M`, `G` |
+| `PedidoItem` | `pedido_itens` | Itens de cada pedido (N:N entre pedidos e estoque) |
+| `Estoque` | `estoque` | Cardápio de itens disponíveis com preço e quantidade (Yao) |
 | `EstadoPedido` | — | Enum: `EM_ANDAMENTO`, `PRONTO`, `ENTREGUE` |
 | `Database` | — | Gerencia a conexão com o PostgreSQL |

@@ -31,22 +31,30 @@ Projeto acadêmico da disciplina de Banco de Dados.
 | numero | VARCHAR | NOT NULL       |
 
 #### `pedidos`
-| Campo      | Tipo           | Restrições                              |
-|------------|----------------|-----------------------------------------|
-| id         | SERIAL         | PK                                      |
-| cliente_id | INT            | FK → clientes(id)                       |
-| tamanho    | ENUM           | P, M, G — NOT NULL                      |
-| data       | DATE           | NOT NULL, default hoje                  |
-| estado     | ENUM           | EM_ANDAMENTO, PRONTO, ENTREGUE          |
-| valor      | NUMERIC(10,2)  | NOT NULL                                |
-| pago       | BOOLEAN        | NOT NULL, default false                 |
+| Campo      | Tipo          | Restrições                              |
+|------------|---------------|-----------------------------------------|
+| id         | SERIAL        | PK                                      |
+| cliente_id | INT           | FK → clientes(id)                       |
+| data       | DATE          | NOT NULL, default hoje                  |
+| estado     | estado_pedido | EM_ANDAMENTO, PRONTO, ENTREGUE          |
+| valor      | NUMERIC(10,2) | NOT NULL, default 0                     |
+| pago       | BOOLEAN       | NOT NULL, default false                 |
 
-#### `estoque` (tabela da loja Yao — única linha de configuração)
-| Campo                  | Tipo          | Restrições  |
-|------------------------|---------------|-------------|
-| id                     | SERIAL        | PK          |
-| quantidade_disponivel  | INT           | NOT NULL    |
-| valor_marmita          | NUMERIC(10,2) | NOT NULL    |
+#### `pedido_itens` (N:N entre pedidos e estoque)
+| Campo      | Tipo   | Restrições                                     |
+|------------|--------|------------------------------------------------|
+| id         | SERIAL | PK                                             |
+| pedido_id  | INT    | FK → pedidos(id) ON DELETE CASCADE             |
+| item_id    | INT    | FK → estoque(id)                               |
+| quantidade | INT    | NOT NULL, default 1, > 0                       |
+
+#### `estoque` (cardápio de itens da loja Yao)
+| Campo                 | Tipo          | Restrições              |
+|-----------------------|---------------|-------------------------|
+| id                    | SERIAL        | PK                      |
+| item                  | VARCHAR(255)  | NOT NULL                |
+| quantidade_disponivel | INT           | NOT NULL, >= 0          |
+| valor                 | NUMERIC(10,2) | NOT NULL, > 0           |
 
 ---
 
@@ -65,8 +73,8 @@ Cada entidade deve suportar:
 
 **Operações extras:**
 - `Pedido`: atualizar estado (`EM_ANDAMENTO` → `PRONTO` → `ENTREGUE`) e marcar como pago
-- `Pedido`: ao criar, decrementar `estoque.quantidade_disponivel`
-- `Estoque`: atualizar quantidade disponível e valor da marmita
+- `Pedido`: ao criar, para cada item em `pedido_itens` decrementar `estoque.quantidade_disponivel`
+- `Estoque`: atualizar quantidade disponível e valor do item
 
 ---
 
@@ -76,7 +84,7 @@ Cada entidade deve suportar:
 frontend/          → a definir (stack ainda não decidida)
 app/
   models/          → Classes de domínio (dataclasses ou Pydantic)
-  repositories/    → Acesso ao banco (ClienteRepository, PedidoRepository, EstoqueRepository)
+  repositories/    → Acesso ao banco (ClienteRepository, PedidoRepository, PedidoItemRepository, EstoqueRepository)
   services/        → Regras de negócio (validações, lógica de estoque)
   routers/         → Rotas FastAPI (endpoints REST)
   database.py      → Conexão com PostgreSQL via psycopg2
@@ -87,10 +95,11 @@ app/
 
 ## Regras de negócio
 
-1. Não é possível criar um pedido se `estoque.quantidade_disponivel == 0`.
-2. O `valor` do pedido é herdado de `estoque.valor_marmita` no momento da criação.
-3. Um cliente só pode ser removido se não tiver pedidos vinculados.
-4. O estado do pedido só pode avançar em ordem: `EM_ANDAMENTO` → `PRONTO` → `ENTREGUE`.
+1. Não é possível adicionar um item ao pedido se `estoque.quantidade_disponivel < quantidade_solicitada`.
+2. O `valor` do pedido é calculado como `SUM(pedido_itens.quantidade * estoque.valor)` no momento da criação.
+3. Ao criar um pedido, decrementar `estoque.quantidade_disponivel` para cada item; ao remover, restaurar.
+4. Um cliente só pode ser removido se não tiver pedidos vinculados.
+5. O estado do pedido só pode avançar em ordem: `EM_ANDAMENTO` → `PRONTO` → `ENTREGUE`.
 
 ---
 
