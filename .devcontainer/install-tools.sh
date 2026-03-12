@@ -23,13 +23,6 @@ sudo install /tmp/lazygit /usr/local/bin/lazygit
 rm -f /tmp/lazygit
 echo "    lazygit v${LAZYGIT_VERSION} instalado em /usr/local/bin/lazygit"
 
-# ── opencode ───────────────────────────────────────────────────────────────────
-echo ">>> Instalando opencode..."
-# Instala em /usr/local/bin para ficar disponível globalmente sem alterar PATH
-curl -fsSL https://opencode.ai/install \
-  | sudo env OPENCODE_INSTALL_DIR=/usr/local/bin bash
-echo "    opencode instalado em /usr/local/bin/opencode"
-
 # ── uv ────────────────────────────────────────────────────────────────────────
 echo ">>> Instalando uv..."
 curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
