@@ -25,7 +25,7 @@ echo "    lazygit v${LAZYGIT_VERSION} instalado em /usr/local/bin/lazygit"
 
 # ── uv ────────────────────────────────────────────────────────────────────────
 echo ">>> Instalando uv..."
-curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+curl -LsSf https://astral.sh/uv/install.sh | sudo UV_INSTALL_DIR=/usr/local/bin sh
 echo "    uv $(uv --version) instalado em /usr/local/bin/uv"
 
 echo ""
