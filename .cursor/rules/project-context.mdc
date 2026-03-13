@@ -43,3 +43,23 @@ frontend/          → a definir (stack ainda não decidida)
 
 ## CRUD obrigatório para cada entidade
 inserir, alterar, remover, buscar_por_nome, listar_todos, exibir_um
+
+## Metodologia: TDD — OBRIGATÓRIO
+**Nunca implemente uma feature sem escrever o teste antes.**
+
+Ciclo: Red → Green → Refactor
+1. Escreva o teste em `tests/test_<modulo>.py` — ele deve falhar
+2. Implemente o mínimo para passar
+3. Refatore sem quebrar testes
+
+Rodar testes: `uv run pytest tests/ -v`
+Convenção de nome: `test_<metodo>_<comportamento>` (ex: `test_inserir_calcula_valor_total`)
+
+## Requisitos acadêmicos obrigatórios
+- Classe gerenciadora de CRUD por entidade (Repository/Manager)
+- Objeto principal com mínimo 4 atributos (Pedido tem 6, Estoque tem 4 ✓)
+- Bastante métodos nas classes
+- Relatórios obrigatórios:
+  - **Vendas:** total de pedidos, valor total, pagos vs não pagos
+  - **Estoque:** itens cadastrados, quantidade disponível, valor de inventário
+  - **Clientes:** total de clientes, clientes com pedidos ativos

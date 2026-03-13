@@ -47,6 +47,19 @@ Para adicionar novos pacotes:
 uv add nome-do-pacote
 ```
 
+### 4. Rodar os testes
+
+```bash
+# Todos os testes
+uv run pytest tests/ -v
+
+# Um arquivo específico
+uv run pytest tests/test_cliente_repository.py -v
+
+# Um teste específico
+uv run pytest tests/test_pedido_repository.py::test_inserir_calcula_valor_total -v
+```
+
 ---
 
 ## Banco de Dados
