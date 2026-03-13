@@ -183,6 +183,7 @@ classDiagram
         +int id
         +str nome
         +str numero
+        +bool ativo
         +inserir()
         +alterar()
         +remover()
@@ -254,11 +255,13 @@ classDiagram
     Estoque ..> Database : usa
 ```
 
+**Regra de negócio (remoção lógica de Cliente):** clientes não são removidos fisicamente do banco. O método `remover()` deve **inativar** o cliente (ex.: `ativo = false`) para preservar o histórico de pedidos e relatórios. Métodos de listagem devem considerar apenas clientes ativos.
+
 ### Descrição das entidades
 
 | Entidade | Tabela | Descrição |
 |---|---|---|
-| `Cliente` | `clientes` | Cadastro de clientes da marmitaria |
+| `Cliente` | `clientes` | Cadastro de clientes da marmitaria (remoção lógica via campo `ativo`) |
 | `Pedido` | `pedidos` | Pedidos realizados pelos clientes |
 | `PedidoItem` | `pedido_itens` | Itens de cada pedido (N:N entre pedidos e estoque) |
 | `Estoque` | `estoque` | Cardápio de itens disponíveis com preço e quantidade (Yao) |
