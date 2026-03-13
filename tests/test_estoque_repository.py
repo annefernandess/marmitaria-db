@@ -67,3 +67,17 @@ def test_remover_remove_item_por_id(db, repo):
 
 def test_remover_item_inexistente_nao_levanta_erro(db, repo):
     repo.remover(999999)
+
+
+def test_listar_todos_ignora_itens_inativos(db, repo):
+    ativo = repo.inserir(Estoque(item="Ativo", quantidade_disponivel=5, valor=Decimal("12.00")))
+    inativo = repo.inserir(Estoque(item="Inativo", quantidade_disponivel=3, valor=Decimal("9.00")))
+
+    # Remoção lógica do item "Inativo"
+    repo.remover(inativo.id)
+
+    itens = repo.listar_todos()
+
+    nomes = [i.item for i in itens]
+    assert "Ativo" in nomes
+    assert "Inativo" not in nomes

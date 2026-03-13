@@ -25,6 +25,7 @@ class EstoqueRepository:
                     """
                     SELECT id, item, quantidade_disponivel, valor
                     FROM estoque
+                    WHERE ativo = TRUE
                     ORDER BY id
                     """
                 )
@@ -43,5 +44,8 @@ class EstoqueRepository:
     def remover(self, item_id: int) -> None:
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM estoque WHERE id = %s", (item_id,))
+                cur.execute(
+                    "UPDATE estoque SET ativo = FALSE WHERE id = %s",
+                    (item_id,),
+                )
             conn.commit()
