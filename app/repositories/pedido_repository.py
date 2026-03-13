@@ -89,16 +89,22 @@ class PedidoRepository:
         ]
 
     def remover(self, pedido_id: int) -> None:
-        """Remove um pedido e restaura o estoque a partir dos itens do pedido."""
+        """Remove um pedido e restaura o estoque a partir dos itens removidos."""
         with get_connection() as conn:
             with conn.cursor() as cur:
+                # Remove primeiro os itens do pedido, recuperando exatamente
+                # o que foi apagado para restaurar o estoque na sequência.
                 cur.execute(
-                    "SELECT item_id, quantidade FROM pedido_itens WHERE pedido_id = %s",
+                    """
+                    DELETE FROM pedido_itens
+                    WHERE pedido_id = %s
+                    RETURNING item_id, quantidade
+                    """,
                     (pedido_id,),
                 )
-                itens = cur.fetchall()
+                itens_removidos = cur.fetchall()
 
-                for item_id, quantidade in itens:
+                for item_id, quantidade in itens_removidos:
                     cur.execute(
                         """
                         UPDATE estoque

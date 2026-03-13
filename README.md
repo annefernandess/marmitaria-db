@@ -96,6 +96,7 @@ erDiagram
         varchar item
         int     quantidade_disponivel
         numeric valor
+        boolean ativo
     }
 
     clientes    ||--o{ pedidos      : "realiza"
@@ -126,6 +127,7 @@ Cardápio de itens disponíveis na loja (Yao).
 | item | `VARCHAR(255)` | `NOT NULL` |
 | quantidade_disponivel | `INT` | `NOT NULL`, `>= 0` |
 | valor | `NUMERIC(10,2)` | `NOT NULL`, `> 0` |
+| ativo | `BOOLEAN` | `NOT NULL`, default `true` (remoção lógica) |
 
 ---
 
@@ -227,6 +229,7 @@ classDiagram
         +str item
         +int quantidade_disponivel
         +Decimal valor
+        +bool ativo
         +inserir()
         +alterar()
         +remover()
@@ -258,6 +261,8 @@ classDiagram
 ```
 
 **Regra de negócio (remoção lógica de Cliente):** clientes não são removidos fisicamente do banco. O método `remover()` deve **inativar** o cliente (ex.: `ativo = false`) para preservar o histórico de pedidos e relatórios. Métodos de listagem devem considerar apenas clientes ativos.
+
+**Regra de negócio (remoção lógica de Estoque):** itens de estoque também não são removidos fisicamente. O método `remover()` de Estoque deve **inativar** o item (ex.: `ativo = false`) para preservar a integridade referencial com `pedido_itens.item_id` e o histórico de vendas. Métodos de listagem devem considerar apenas itens ativos.
 
 ### Descrição das entidades
 

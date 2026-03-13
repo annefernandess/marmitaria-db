@@ -26,11 +26,21 @@ class PedidoItemRepository:
         ]
 
     def remover(self, pedido_item_id: int) -> None:
-        """Remove um item de pedido e restaura o estoque correspondente."""
+        """Remove um item de pedido e restaura o estoque correspondente.
+
+        Usa ``DELETE ... RETURNING`` para garantir que apenas a transação que
+        de fato removeu o registro devolva a quantidade ao estoque. Em cenários
+        concorrentes, uma segunda chamada para o mesmo ``pedido_item_id`` não
+        encontrará linhas para apagar e, consequentemente, não restaurará nada.
+        """
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT item_id, quantidade FROM pedido_itens WHERE id = %s",
+                    """
+                    DELETE FROM pedido_itens
+                    WHERE id = %s
+                    RETURNING item_id, quantidade
+                    """,
                     (pedido_item_id,),
                 )
                 row = cur.fetchone()
@@ -49,7 +59,5 @@ class PedidoItemRepository:
                     """,
                     (quantidade, item_id),
                 )
-
-                cur.execute("DELETE FROM pedido_itens WHERE id = %s", (pedido_item_id,))
 
             conn.commit()
