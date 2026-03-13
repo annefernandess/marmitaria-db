@@ -72,6 +72,7 @@ erDiagram
         serial  id     PK
         varchar nome
         varchar numero
+        boolean ativo
     }
 
     pedidos {
@@ -110,6 +111,7 @@ erDiagram
 | id | `SERIAL` | `PRIMARY KEY` |
 | nome | `VARCHAR(255)` | `NOT NULL` |
 | numero | `VARCHAR(20)` | `NOT NULL` |
+| ativo | `BOOLEAN` | `NOT NULL`, default `true` (remoção lógica) |
 
 **Índice:** `idx_clientes_nome` em `nome` — para busca por nome.
 
