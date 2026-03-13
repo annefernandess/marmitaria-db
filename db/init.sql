@@ -5,8 +5,13 @@
 
 -- Tipos enumerados
 DO $$ BEGIN
-    CREATE TYPE estado_pedido AS ENUM ('EM_ANDAMENTO', 'PRONTO', 'ENTREGUE');
+    CREATE TYPE estado_pedido AS ENUM ('EM_ANDAMENTO', 'PRONTO', 'ENTREGUE', 'CANCELADO');
 EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Garante que CANCELADO existe em bancos criados antes desta migração
+DO $$ BEGIN
+    ALTER TYPE estado_pedido ADD VALUE IF NOT EXISTS 'CANCELADO';
 END $$;
 
 -- ------------------------------------------------------------
@@ -36,7 +41,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
     cliente_id  INT            NOT NULL REFERENCES clientes(id),
     data        DATE           NOT NULL DEFAULT CURRENT_DATE,
     estado      estado_pedido  NOT NULL DEFAULT 'EM_ANDAMENTO',
-    valor       NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    valor       NUMERIC(10, 2) NOT NULL DEFAULT 0 CHECK (valor >= 0),
     pago        BOOLEAN        NOT NULL DEFAULT FALSE
 );
 
@@ -47,8 +52,20 @@ CREATE TABLE IF NOT EXISTS pedido_itens (
     id         SERIAL PRIMARY KEY,
     pedido_id  INT    NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
     item_id    INT    NOT NULL REFERENCES estoque(id),
-    quantidade INT    NOT NULL DEFAULT 1 CHECK (quantidade > 0)
+    quantidade INT    NOT NULL DEFAULT 1 CHECK (quantidade > 0),
+    CONSTRAINT uq_pedido_item UNIQUE (pedido_id, item_id)
 );
+
+-- Garante constraints em bancos criados antes desta migração
+DO $$ BEGIN
+    ALTER TABLE pedido_itens ADD CONSTRAINT uq_pedido_item UNIQUE (pedido_id, item_id);
+EXCEPTION WHEN duplicate_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE pedidos ADD CONSTRAINT pedidos_valor_check CHECK (valor >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ------------------------------------------------------------
 --  Índices úteis para as buscas mais comuns
