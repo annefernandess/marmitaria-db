@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from app.database import get_connection
+from app.models.enums import EstadoPedido
 from app.models.pedido import Pedido
 from app.models.pedido_item import PedidoItem
 
@@ -62,6 +63,54 @@ class PedidoRepository:
 
             conn.commit()
         return pedido
+
+    def listar_todos(self) -> list[Pedido]:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, cliente_id, data, estado, valor, pago
+                    FROM pedidos
+                    ORDER BY id
+                    """
+                )
+                rows = cur.fetchall()
+
+        return [
+            Pedido(
+                id=row[0],
+                cliente_id=row[1],
+                data=row[2],
+                estado=EstadoPedido(row[3]),
+                valor=row[4],
+                pago=row[5],
+            )
+            for row in rows
+        ]
+
+    def remover(self, pedido_id: int) -> None:
+        """Remove um pedido e restaura o estoque a partir dos itens do pedido."""
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT item_id, quantidade FROM pedido_itens WHERE pedido_id = %s",
+                    (pedido_id,),
+                )
+                itens = cur.fetchall()
+
+                for item_id, quantidade in itens:
+                    cur.execute(
+                        """
+                        UPDATE estoque
+                        SET quantidade_disponivel = quantidade_disponivel + %s
+                        WHERE id = %s
+                        """,
+                        (quantidade, item_id),
+                    )
+
+                cur.execute("DELETE FROM pedidos WHERE id = %s", (pedido_id,))
+
+            conn.commit()
 
     def _mesclar_itens(self, itens: list[PedidoItem]) -> list[PedidoItem]:
         """

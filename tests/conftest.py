@@ -63,6 +63,7 @@ def db(monkeypatch):
     monkeypatch.setattr("app.repositories.cliente_repository.get_connection", mock)
     monkeypatch.setattr("app.repositories.estoque_repository.get_connection", mock)
     monkeypatch.setattr("app.repositories.pedido_repository.get_connection", mock)
+    monkeypatch.setattr("app.repositories.pedido_item_repository.get_connection", mock)
 
     yield wrapped
 

@@ -43,3 +43,27 @@ def test_inserir_valor_zero_levanta_erro(db, repo):
 def test_inserir_quantidade_negativa_levanta_erro(db, repo):
     with pytest.raises(Exception):
         repo.inserir(Estoque(item="Item Invalido", quantidade_disponivel=-1, valor=Decimal("10.00")))
+
+
+def test_listar_todos_retorna_itens_inseridos(db, repo):
+    repo.inserir(Estoque(item="Frango", quantidade_disponivel=10, valor=Decimal("15.00")))
+    repo.inserir(Estoque(item="Carne", quantidade_disponivel=8, valor=Decimal("17.00")))
+
+    itens = repo.listar_todos()
+
+    assert len(itens) == 2
+    assert [i.item for i in itens] == ["Frango", "Carne"]
+    assert all(isinstance(i.id, int) for i in itens)
+
+
+def test_remover_remove_item_por_id(db, repo):
+    item = repo.inserir(Estoque(item="Remover", quantidade_disponivel=1, valor=Decimal("10.00")))
+
+    repo.remover(item.id)
+
+    itens = repo.listar_todos()
+    assert itens == []
+
+
+def test_remover_item_inexistente_nao_levanta_erro(db, repo):
+    repo.remover(999999)

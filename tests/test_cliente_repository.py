@@ -35,3 +35,27 @@ def test_inserir_ids_distintos(db, repo):
 def test_inserir_sem_numero_levanta_erro(db, repo):
     with pytest.raises(Exception):
         repo.inserir(Cliente(nome="Sem Numero", numero=None))
+
+
+def test_listar_todos_retorna_clientes_inseridos(db, repo):
+    repo.inserir(Cliente(nome="Ana", numero="11111111111"))
+    repo.inserir(Cliente(nome="Pedro", numero="22222222222"))
+
+    clientes = repo.listar_todos()
+
+    assert len(clientes) == 2
+    assert [c.nome for c in clientes] == ["Ana", "Pedro"]
+    assert all(isinstance(c.id, int) for c in clientes)
+
+
+def test_remover_remove_cliente_por_id(db, repo):
+    cliente = repo.inserir(Cliente(nome="Remover", numero="11333333333"))
+
+    repo.remover(cliente.id)
+
+    clientes = repo.listar_todos()
+    assert clientes == []
+
+
+def test_remover_cliente_inexistente_nao_levanta_erro(db, repo):
+    repo.remover(999999)

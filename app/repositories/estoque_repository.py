@@ -17,3 +17,31 @@ class EstoqueRepository:
                 estoque.id = cur.fetchone()[0]
             conn.commit()
         return estoque
+
+    def listar_todos(self) -> list[Estoque]:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, item, quantidade_disponivel, valor
+                    FROM estoque
+                    ORDER BY id
+                    """
+                )
+                rows = cur.fetchall()
+
+        return [
+            Estoque(
+                id=row[0],
+                item=row[1],
+                quantidade_disponivel=row[2],
+                valor=row[3],
+            )
+            for row in rows
+        ]
+
+    def remover(self, item_id: int) -> None:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM estoque WHERE id = %s", (item_id,))
+            conn.commit()
