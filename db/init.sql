@@ -20,8 +20,13 @@ END $$;
 CREATE TABLE IF NOT EXISTS clientes (
     id     SERIAL       PRIMARY KEY,
     nome   VARCHAR(255) NOT NULL,
-    numero VARCHAR(20)  NOT NULL
+    numero VARCHAR(20)  NOT NULL,
+    ativo  BOOLEAN      NOT NULL DEFAULT TRUE
 );
+
+-- Garante coluna de remoção lógica em bancos criados antes desta migração
+ALTER TABLE IF EXISTS clientes
+    ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- ------------------------------------------------------------
 --  Estoque (cardápio / itens disponíveis)
