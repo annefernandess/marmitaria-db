@@ -51,4 +51,4 @@ class ClienteRepository:
             conn.commit()
 
         if has_pedidos:
-            raise Exception("Não é possível remover: cliente possui pedidos vinculados.")
+            raise ValueError("Não é possível remover: cliente possui pedidos vinculados.")
