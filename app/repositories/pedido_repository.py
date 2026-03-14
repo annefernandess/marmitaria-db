@@ -22,6 +22,7 @@ class PedidoRepository:
 
         with get_connection() as conn:
             with conn.cursor() as cur:
+                self._validar_cliente(cur, pedido.cliente_id)
                 self._validar_e_calcular(cur, pedido, itens)
 
                 cur.execute(
@@ -154,7 +155,7 @@ class PedidoRepository:
 
         for item_id, qtd_total in qtd_por_item.items():
             cur.execute(
-                "SELECT item, quantidade_disponivel, valor FROM estoque WHERE id = %s FOR UPDATE",
+                "SELECT item, quantidade_disponivel, valor, ativo FROM estoque WHERE id = %s FOR UPDATE",
                 (item_id,),
             )
             row = cur.fetchone()
@@ -162,7 +163,10 @@ class PedidoRepository:
             if row is None:
                 raise ValueError(f"Item com id={item_id} não encontrado no estoque.")
 
-            nome_item, qtd_disponivel, valor_unitario = row
+            nome_item, qtd_disponivel, valor_unitario, ativo = row
+
+            if not ativo:
+                raise ValueError(f"Item '{nome_item}' está inativo e não pode ser usado em pedidos.")
 
             if qtd_disponivel < qtd_total:
                 raise ValueError(
@@ -173,3 +177,17 @@ class PedidoRepository:
             total += Decimal(str(valor_unitario)) * qtd_total
 
         pedido.valor = total
+
+    def _validar_cliente(self, cur, cliente_id: int) -> None:
+        cur.execute(
+            "SELECT ativo FROM clientes WHERE id = %s FOR UPDATE",
+            (cliente_id,),
+        )
+        row = cur.fetchone()
+
+        if row is None:
+            raise ValueError(f"Cliente com id={cliente_id} não encontrado.")
+
+        ativo = row[0]
+        if not ativo:
+            raise ValueError("Cliente inativo não pode fazer pedidos.")
