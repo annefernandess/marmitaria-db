@@ -34,10 +34,21 @@ class ClienteRepository:
         return [Cliente(id=row[0], nome=row[1], numero=row[2], ativo=row[3]) for row in rows]
 
     def remover(self, cliente_id: int) -> None:
+        has_pedidos = False
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "UPDATE clientes SET ativo = FALSE WHERE id = %s",
+                    "SELECT 1 FROM pedidos WHERE cliente_id = %s LIMIT 1",
                     (cliente_id,),
                 )
+                has_pedidos = cur.fetchone() is not None
+
+                if not has_pedidos:
+                    cur.execute(
+                        "UPDATE clientes SET ativo = FALSE WHERE id = %s",
+                        (cliente_id,),
+                    )
             conn.commit()
+
+        if has_pedidos:
+            raise Exception("Não é possível remover: cliente possui pedidos vinculados.")
