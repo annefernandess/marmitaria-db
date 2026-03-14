@@ -71,7 +71,7 @@ def test_remover_cliente_inexistente_nao_levanta_erro(db, repo):
     repo.remover(999999)
 
 
-def test_remover_cliente_com_pedidos_nao_falha_e_preserva_historico(db, repo):
+def test_remover_cliente_com_pedidos_levanta_erro_e_preserva_historico(db, repo):
     cliente = repo.inserir(Cliente(nome="Cliente com Pedido", numero="11444444444"))
     item = EstoqueRepository().inserir(
         Estoque(item="Marmita", quantidade_disponivel=10, valor=Decimal("10.00"))
