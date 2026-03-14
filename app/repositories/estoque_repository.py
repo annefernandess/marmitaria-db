@@ -8,11 +8,16 @@ class EstoqueRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO estoque (item, quantidade_disponivel, valor)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO estoque (item, quantidade_disponivel, valor, ativo)
+                    VALUES (%s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (estoque.item, estoque.quantidade_disponivel, estoque.valor),
+                    (
+                        estoque.item,
+                        estoque.quantidade_disponivel,
+                        estoque.valor,
+                        estoque.ativo,
+                    ),
                 )
                 estoque.id = cur.fetchone()[0]
             conn.commit()
