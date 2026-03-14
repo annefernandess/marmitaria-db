@@ -101,3 +101,92 @@ def test_inserir_pedido_falha_se_item_inativo(db):
             Pedido(cliente_id=cliente.id),
             [PedidoItem(pedido_id=0, item_id=item.id, quantidade=1)],
         )
+
+
+def test_alterar_atualiza_campos(db, repo):
+    item = repo.inserir(Estoque(item="Marmita", quantidade_disponivel=5, valor=Decimal("10.00")))
+
+    atualizado = Estoque(
+        id=item.id,
+        item="Marmita Fit",
+        quantidade_disponivel=8,
+        valor=Decimal("12.50"),
+    )
+
+    resultado = repo.alterar(atualizado)
+
+    assert resultado.id == item.id
+    assert resultado.item == "Marmita Fit"
+    assert resultado.quantidade_disponivel == 8
+    assert resultado.valor == Decimal("12.50")
+
+    with db.cursor() as cur:
+        cur.execute(
+            "SELECT item, quantidade_disponivel, valor FROM estoque WHERE id = %s",
+            (item.id,),
+        )
+        row = cur.fetchone()
+
+    assert row == ("Marmita Fit", 8, Decimal("12.50"))
+
+
+def test_alterar_item_inexistente_levanta_erro(db, repo):
+    inexistente = Estoque(id=999999, item="Ghost", quantidade_disponivel=1, valor=Decimal("1.00"))
+
+    with pytest.raises(ValueError, match="não encontrado"):
+        repo.alterar(inexistente)
+
+
+def test_alterar_item_inativo_levanta_erro(db, repo):
+    item = repo.inserir(Estoque(item="Marmita", quantidade_disponivel=5, valor=Decimal("10.00")))
+    repo.remover(item.id)
+
+    with pytest.raises(ValueError, match="inativo"):
+        repo.alterar(
+            Estoque(
+                id=item.id,
+                item="Marmita Nova",
+                quantidade_disponivel=3,
+                valor=Decimal("9.00"),
+            )
+        )
+
+
+def test_buscar_por_nome_parcial_case_insensitive(db, repo):
+    frango = repo.inserir(Estoque(item="Marmita Frango", quantidade_disponivel=5, valor=Decimal("10.00")))
+    grelhado = repo.inserir(
+        Estoque(item="Frango Grelhado", quantidade_disponivel=4, valor=Decimal("12.00"))
+    )
+    repo.inserir(Estoque(item="Carne", quantidade_disponivel=3, valor=Decimal("15.00")))
+
+    resultados = repo.buscar_por_nome("frango")
+
+    assert [r.id for r in resultados] == [frango.id, grelhado.id]
+
+
+def test_buscar_por_nome_ignora_inativos(db, repo):
+    ativo = repo.inserir(Estoque(item="Vegano", quantidade_disponivel=2, valor=Decimal("11.00")))
+    inativo = repo.inserir(Estoque(item="Vegano Especial", quantidade_disponivel=1, valor=Decimal("13.00")))
+    repo.remover(inativo.id)
+
+    resultados = repo.buscar_por_nome("vega")
+
+    assert [r.id for r in resultados] == [ativo.id]
+
+
+def test_exibir_um_retorna_item_ativo(db, repo):
+    item = repo.inserir(Estoque(item="Sobremesa", quantidade_disponivel=6, valor=Decimal("8.00")))
+
+    resultado = repo.exibir_um(item.id)
+
+    assert resultado is not None
+    assert resultado.id == item.id
+    assert resultado.item == "Sobremesa"
+
+
+def test_exibir_um_inativo_ou_inexistente_retorna_none(db, repo):
+    item = repo.inserir(Estoque(item="Suco", quantidade_disponivel=10, valor=Decimal("5.00")))
+    repo.remover(item.id)
+
+    assert repo.exibir_um(item.id) is None
+    assert repo.exibir_um(999999) is None
