@@ -191,6 +191,19 @@ def test_inserir_pedido_cancelado(db, repo, cliente, item_estoque):
     assert resultado.estado == EstadoPedido.CANCELADO
 
 
+def test_inserir_falha_se_cliente_inativo(db, repo, item_estoque):
+    cliente_repo = ClienteRepository()
+    cliente_inativo = cliente_repo.inserir(Cliente(nome="Inativo", numero="11900000001"))
+    # Soft delete do cliente sem pedidos vinculados
+    cliente_repo.remover(cliente_inativo.id)
+
+    pedido = Pedido(cliente_id=cliente_inativo.id)
+    itens = [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)]
+
+    with pytest.raises(ValueError, match="inativo"):
+        repo.inserir(pedido, itens)
+
+
 def test_listar_todos_retorna_pedidos_inseridos(db, repo, cliente, db_dois_itens):
     item_a, _ = db_dois_itens
     p1 = repo.inserir(

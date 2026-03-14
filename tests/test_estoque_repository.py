@@ -2,8 +2,13 @@ from decimal import Decimal
 
 import pytest
 
+from app.models.cliente import Cliente
 from app.models.estoque import Estoque
+from app.models.pedido import Pedido
+from app.models.pedido_item import PedidoItem
+from app.repositories.cliente_repository import ClienteRepository
 from app.repositories.estoque_repository import EstoqueRepository
+from app.repositories.pedido_repository import PedidoRepository
 
 
 @pytest.fixture
@@ -81,3 +86,18 @@ def test_listar_todos_ignora_itens_inativos(db, repo):
     nomes = [i.item for i in itens]
     assert "Ativo" in nomes
     assert "Inativo" not in nomes
+
+
+def test_inserir_pedido_falha_se_item_inativo(db):
+    cliente = ClienteRepository().inserir(Cliente(nome="Cliente", numero="11900000000"))
+    estoque_repo = EstoqueRepository()
+    pedido_repo = PedidoRepository()
+
+    item = estoque_repo.inserir(Estoque(item="Marmita", quantidade_disponivel=5, valor=Decimal("10.00")))
+    estoque_repo.remover(item.id)  # soft delete (ativo = FALSE)
+
+    with pytest.raises(ValueError, match="inativo"):
+        pedido_repo.inserir(
+            Pedido(cliente_id=cliente.id),
+            [PedidoItem(pedido_id=0, item_id=item.id, quantidade=1)],
+        )

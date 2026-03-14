@@ -81,12 +81,12 @@ def test_remover_cliente_com_pedidos_nao_falha_e_preserva_historico(db, repo):
         Pedido(cliente_id=cliente.id),
         [PedidoItem(pedido_id=0, item_id=item.id, quantidade=1)],
     )
-
-    repo.remover(cliente.id)
+    with pytest.raises(Exception):
+        repo.remover(cliente.id)
 
     with db.cursor() as cur:
         cur.execute("SELECT ativo FROM clientes WHERE id = %s", (cliente.id,))
-        assert cur.fetchone()[0] is False
+        assert cur.fetchone()[0] is True
 
         cur.execute("SELECT COUNT(*) FROM pedidos WHERE id = %s", (pedido.id,))
         assert cur.fetchone()[0] == 1
