@@ -20,8 +20,13 @@ END $$;
 CREATE TABLE IF NOT EXISTS clientes (
     id     SERIAL       PRIMARY KEY,
     nome   VARCHAR(255) NOT NULL,
-    numero VARCHAR(20)  NOT NULL
+    numero VARCHAR(20)  NOT NULL,
+    ativo  BOOLEAN      NOT NULL DEFAULT TRUE
 );
+
+-- Garante coluna de remoção lógica em bancos criados antes desta migração
+ALTER TABLE IF EXISTS clientes
+    ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- ------------------------------------------------------------
 --  Estoque (cardápio / itens disponíveis)
@@ -30,8 +35,13 @@ CREATE TABLE IF NOT EXISTS estoque (
     id                    SERIAL         PRIMARY KEY,
     item                  VARCHAR(255)   NOT NULL,
     quantidade_disponivel INT            NOT NULL DEFAULT 0 CHECK (quantidade_disponivel >= 0),
-    valor                 NUMERIC(10, 2) NOT NULL CHECK (valor > 0)
+    valor                 NUMERIC(10, 2) NOT NULL CHECK (valor > 0),
+    ativo                 BOOLEAN        NOT NULL DEFAULT TRUE
 );
+
+-- Garante coluna de remoção lógica em bancos criados antes desta migração
+ALTER TABLE IF EXISTS estoque
+    ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- ------------------------------------------------------------
 --  Pedidos

@@ -2,8 +2,13 @@ from decimal import Decimal
 
 import pytest
 
+from app.models.cliente import Cliente
 from app.models.estoque import Estoque
+from app.models.pedido import Pedido
+from app.models.pedido_item import PedidoItem
+from app.repositories.cliente_repository import ClienteRepository
 from app.repositories.estoque_repository import EstoqueRepository
+from app.repositories.pedido_repository import PedidoRepository
 
 
 @pytest.fixture
@@ -43,3 +48,56 @@ def test_inserir_valor_zero_levanta_erro(db, repo):
 def test_inserir_quantidade_negativa_levanta_erro(db, repo):
     with pytest.raises(Exception):
         repo.inserir(Estoque(item="Item Invalido", quantidade_disponivel=-1, valor=Decimal("10.00")))
+
+
+def test_listar_todos_retorna_itens_inseridos(db, repo):
+    repo.inserir(Estoque(item="Frango", quantidade_disponivel=10, valor=Decimal("15.00")))
+    repo.inserir(Estoque(item="Carne", quantidade_disponivel=8, valor=Decimal("17.00")))
+
+    itens = repo.listar_todos()
+
+    assert len(itens) == 2
+    assert [i.item for i in itens] == ["Frango", "Carne"]
+    assert all(isinstance(i.id, int) for i in itens)
+
+
+def test_remover_remove_item_por_id(db, repo):
+    item = repo.inserir(Estoque(item="Remover", quantidade_disponivel=1, valor=Decimal("10.00")))
+
+    repo.remover(item.id)
+
+    itens = repo.listar_todos()
+    assert itens == []
+
+
+def test_remover_item_inexistente_nao_levanta_erro(db, repo):
+    repo.remover(999999)
+
+
+def test_listar_todos_ignora_itens_inativos(db, repo):
+    ativo = repo.inserir(Estoque(item="Ativo", quantidade_disponivel=5, valor=Decimal("12.00")))
+    inativo = repo.inserir(Estoque(item="Inativo", quantidade_disponivel=3, valor=Decimal("9.00")))
+
+    # Remoção lógica do item "Inativo"
+    repo.remover(inativo.id)
+
+    itens = repo.listar_todos()
+
+    nomes = [i.item for i in itens]
+    assert "Ativo" in nomes
+    assert "Inativo" not in nomes
+
+
+def test_inserir_pedido_falha_se_item_inativo(db):
+    cliente = ClienteRepository().inserir(Cliente(nome="Cliente", numero="11900000000"))
+    estoque_repo = EstoqueRepository()
+    pedido_repo = PedidoRepository()
+
+    item = estoque_repo.inserir(Estoque(item="Marmita", quantidade_disponivel=5, valor=Decimal("10.00")))
+    estoque_repo.remover(item.id)  # soft delete (ativo = FALSE)
+
+    with pytest.raises(ValueError, match="inativo"):
+        pedido_repo.inserir(
+            Pedido(cliente_id=cliente.id),
+            [PedidoItem(pedido_id=0, item_id=item.id, quantidade=1)],
+        )

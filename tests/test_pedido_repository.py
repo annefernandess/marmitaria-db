@@ -191,6 +191,58 @@ def test_inserir_pedido_cancelado(db, repo, cliente, item_estoque):
     assert resultado.estado == EstadoPedido.CANCELADO
 
 
+def test_inserir_falha_se_cliente_inativo(db, repo, item_estoque):
+    cliente_repo = ClienteRepository()
+    cliente_inativo = cliente_repo.inserir(Cliente(nome="Inativo", numero="11900000001"))
+    # Soft delete do cliente sem pedidos vinculados
+    cliente_repo.remover(cliente_inativo.id)
+
+    pedido = Pedido(cliente_id=cliente_inativo.id)
+    itens = [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)]
+
+    with pytest.raises(ValueError, match="inativo"):
+        repo.inserir(pedido, itens)
+
+
+def test_listar_todos_retorna_pedidos_inseridos(db, repo, cliente, db_dois_itens):
+    item_a, _ = db_dois_itens
+    p1 = repo.inserir(
+        Pedido(cliente_id=cliente.id),
+        [PedidoItem(pedido_id=0, item_id=item_a.id, quantidade=1)],
+    )
+    p2 = repo.inserir(
+        Pedido(cliente_id=cliente.id),
+        [PedidoItem(pedido_id=0, item_id=item_a.id, quantidade=1)],
+    )
+
+    pedidos = repo.listar_todos()
+
+    assert [p.id for p in pedidos] == [p1.id, p2.id]
+
+
+def test_remover_pedido_remove_registro_e_itens_e_restaura_estoque(db, repo, cliente, item_estoque):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=4)],
+    )
+
+    repo.remover(pedido.id)
+
+    with db.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM pedidos WHERE id = %s", (pedido.id,))
+        assert cur.fetchone()[0] == 0
+
+        cur.execute("SELECT COUNT(*) FROM pedido_itens WHERE pedido_id = %s", (pedido.id,))
+        assert cur.fetchone()[0] == 0
+
+        cur.execute("SELECT quantidade_disponivel FROM estoque WHERE id = %s", (item_estoque.id,))
+        assert cur.fetchone()[0] == 10
+
+
+def test_remover_pedido_inexistente_nao_levanta_erro(db, repo):
+    repo.remover(999999)
+
+
 @pytest.fixture
 def db_dois_itens(db):
     repo = EstoqueRepository()

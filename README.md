@@ -72,6 +72,7 @@ erDiagram
         serial  id     PK
         varchar nome
         varchar numero
+        boolean ativo
     }
 
     pedidos {
@@ -95,6 +96,7 @@ erDiagram
         varchar item
         int     quantidade_disponivel
         numeric valor
+        boolean ativo
     }
 
     clientes    ||--o{ pedidos      : "realiza"
@@ -110,6 +112,7 @@ erDiagram
 | id | `SERIAL` | `PRIMARY KEY` |
 | nome | `VARCHAR(255)` | `NOT NULL` |
 | numero | `VARCHAR(20)` | `NOT NULL` |
+| ativo | `BOOLEAN` | `NOT NULL`, default `true` (remoção lógica) |
 
 **Índice:** `idx_clientes_nome` em `nome` — para busca por nome.
 
@@ -124,6 +127,7 @@ Cardápio de itens disponíveis na loja (Yao).
 | item | `VARCHAR(255)` | `NOT NULL` |
 | quantidade_disponivel | `INT` | `NOT NULL`, `>= 0` |
 | valor | `NUMERIC(10,2)` | `NOT NULL`, `> 0` |
+| ativo | `BOOLEAN` | `NOT NULL`, default `true` (remoção lógica) |
 
 ---
 
@@ -183,6 +187,7 @@ classDiagram
         +int id
         +str nome
         +str numero
+        +bool ativo
         +inserir()
         +alterar()
         +remover()
@@ -224,6 +229,7 @@ classDiagram
         +str item
         +int quantidade_disponivel
         +Decimal valor
+        +bool ativo
         +inserir()
         +alterar()
         +remover()
@@ -254,11 +260,15 @@ classDiagram
     Estoque ..> Database : usa
 ```
 
+**Regra de negócio (remoção lógica de Cliente):** clientes não são removidos fisicamente do banco. Quando o cliente **não possui pedidos vinculados**, o método `remover()` deve **inativar** o cliente (ex.: `ativo = false`) para preservar o histórico e permitir reativação futura. Quando o cliente **possui pedidos vinculados**, o método `remover()` deve lançar uma exceção e **não** permitir a remoção/inativação, garantindo a preservação do histórico de pedidos e relatórios. Métodos de listagem devem considerar apenas clientes ativos.
+
+**Regra de negócio (remoção lógica de Estoque):** itens de estoque também não são removidos fisicamente. O método `remover()` de Estoque deve **inativar** o item (ex.: `ativo = false`) para preservar a integridade referencial com `pedido_itens.item_id` e o histórico de vendas. Métodos de listagem devem considerar apenas itens ativos.
+
 ### Descrição das entidades
 
 | Entidade | Tabela | Descrição |
 |---|---|---|
-| `Cliente` | `clientes` | Cadastro de clientes da marmitaria |
+| `Cliente` | `clientes` | Cadastro de clientes da marmitaria (remoção lógica via campo `ativo`) |
 | `Pedido` | `pedidos` | Pedidos realizados pelos clientes |
 | `PedidoItem` | `pedido_itens` | Itens de cada pedido (N:N entre pedidos e estoque) |
 | `Estoque` | `estoque` | Cardápio de itens disponíveis com preço e quantidade (Yao) |

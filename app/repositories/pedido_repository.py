@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from app.database import get_connection
+from app.models.enums import EstadoPedido
 from app.models.pedido import Pedido
 from app.models.pedido_item import PedidoItem
 
@@ -21,6 +22,7 @@ class PedidoRepository:
 
         with get_connection() as conn:
             with conn.cursor() as cur:
+                self._validar_cliente(cur, pedido.cliente_id)
                 self._validar_e_calcular(cur, pedido, itens)
 
                 cur.execute(
@@ -63,6 +65,60 @@ class PedidoRepository:
             conn.commit()
         return pedido
 
+    def listar_todos(self) -> list[Pedido]:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, cliente_id, data, estado, valor, pago
+                    FROM pedidos
+                    ORDER BY id
+                    """
+                )
+                rows = cur.fetchall()
+
+        return [
+            Pedido(
+                id=row[0],
+                cliente_id=row[1],
+                data=row[2],
+                estado=EstadoPedido(row[3]),
+                valor=row[4],
+                pago=row[5],
+            )
+            for row in rows
+        ]
+
+    def remover(self, pedido_id: int) -> None:
+        """Remove um pedido e restaura o estoque a partir dos itens removidos."""
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                # Remove primeiro os itens do pedido, recuperando exatamente
+                # o que foi apagado para restaurar o estoque na sequência.
+                cur.execute(
+                    """
+                    DELETE FROM pedido_itens
+                    WHERE pedido_id = %s
+                    RETURNING item_id, quantidade
+                    """,
+                    (pedido_id,),
+                )
+                itens_removidos = cur.fetchall()
+
+                for item_id, quantidade in itens_removidos:
+                    cur.execute(
+                        """
+                        UPDATE estoque
+                        SET quantidade_disponivel = quantidade_disponivel + %s
+                        WHERE id = %s
+                        """,
+                        (quantidade, item_id),
+                    )
+
+                cur.execute("DELETE FROM pedidos WHERE id = %s", (pedido_id,))
+
+            conn.commit()
+
     def _mesclar_itens(self, itens: list[PedidoItem]) -> list[PedidoItem]:
         """
         Une linhas com o mesmo item_id somando as quantidades.
@@ -99,7 +155,7 @@ class PedidoRepository:
 
         for item_id, qtd_total in qtd_por_item.items():
             cur.execute(
-                "SELECT item, quantidade_disponivel, valor FROM estoque WHERE id = %s FOR UPDATE",
+                "SELECT item, quantidade_disponivel, valor, ativo FROM estoque WHERE id = %s FOR UPDATE",
                 (item_id,),
             )
             row = cur.fetchone()
@@ -107,7 +163,10 @@ class PedidoRepository:
             if row is None:
                 raise ValueError(f"Item com id={item_id} não encontrado no estoque.")
 
-            nome_item, qtd_disponivel, valor_unitario = row
+            nome_item, qtd_disponivel, valor_unitario, ativo = row
+
+            if not ativo:
+                raise ValueError(f"Item '{nome_item}' está inativo e não pode ser usado em pedidos.")
 
             if qtd_disponivel < qtd_total:
                 raise ValueError(
@@ -118,3 +177,17 @@ class PedidoRepository:
             total += Decimal(str(valor_unitario)) * qtd_total
 
         pedido.valor = total
+
+    def _validar_cliente(self, cur, cliente_id: int) -> None:
+        cur.execute(
+            "SELECT ativo FROM clientes WHERE id = %s FOR UPDATE",
+            (cliente_id,),
+        )
+        row = cur.fetchone()
+
+        if row is None:
+            raise ValueError(f"Cliente com id={cliente_id} não encontrado.")
+
+        ativo = row[0]
+        if not ativo:
+            raise ValueError("Cliente inativo não pode fazer pedidos.")
