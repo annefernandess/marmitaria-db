@@ -243,6 +243,130 @@ def test_remover_pedido_inexistente_nao_levanta_erro(db, repo):
     repo.remover(999999)
 
 
+def test_exibir_um_retorna_pedido(db, repo, cliente, item_estoque):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+
+    encontrado = repo.exibir_um(pedido.id)
+
+    assert encontrado is not None
+    assert encontrado.id == pedido.id
+    assert encontrado.cliente_id == cliente.id
+
+
+def test_exibir_um_inexistente_retorna_none(db, repo):
+    assert repo.exibir_um(999999) is None
+
+
+def test_alterar_avanca_estado_e_paga(db, repo, cliente, item_estoque):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+
+    atualizado = Pedido(
+        id=pedido.id,
+        cliente_id=pedido.cliente_id,
+        data=pedido.data,
+        estado=EstadoPedido.PRONTO,
+        valor=pedido.valor,
+        pago=True,
+    )
+
+    resultado = repo.alterar(atualizado)
+
+    assert resultado.estado == EstadoPedido.PRONTO
+    assert resultado.pago is True
+
+    with db.cursor() as cur:
+        cur.execute("SELECT estado, pago FROM pedidos WHERE id = %s", (pedido.id,))
+        estado, pago = cur.fetchone()
+
+    assert estado == EstadoPedido.PRONTO.value
+    assert pago is True
+
+
+def test_alterar_nao_permite_regredir_estado(db, repo, cliente, item_estoque):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id, estado=EstadoPedido.PRONTO),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+
+    with pytest.raises(ValueError, match="retroceder"):
+        repo.alterar(
+            Pedido(
+                id=pedido.id,
+                cliente_id=pedido.cliente_id,
+                data=pedido.data,
+                estado=EstadoPedido.EM_ANDAMENTO,
+                valor=pedido.valor,
+                pago=pedido.pago,
+            )
+        )
+
+
+def test_alterar_nao_permite_pagar_cancelado(db, repo, cliente, item_estoque):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id, estado=EstadoPedido.CANCELADO),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+
+    with pytest.raises(ValueError, match="cancelado"):
+        repo.alterar(
+            Pedido(
+                id=pedido.id,
+                cliente_id=pedido.cliente_id,
+                data=pedido.data,
+                estado=pedido.estado,
+                valor=pedido.valor,
+                pago=True,
+            )
+        )
+
+
+def test_alterar_nao_permite_regredir_pagamento(db, repo, cliente, item_estoque):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id, estado=EstadoPedido.EM_ANDAMENTO),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+
+    repo.alterar(
+        Pedido(
+            id=pedido.id,
+            cliente_id=pedido.cliente_id,
+            data=pedido.data,
+            estado=EstadoPedido.PRONTO,
+            valor=pedido.valor,
+            pago=True,
+        )
+    )
+
+
+def test_alterar_falha_se_cliente_inativo(db, repo, cliente, item_estoque):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+
+    with db.cursor() as cur:
+        cur.execute("UPDATE clientes SET ativo = FALSE WHERE id = %s", (cliente.id,))
+        db.commit()
+
+    with pytest.raises(ValueError, match="cliente inativo"):
+        repo.alterar(
+            Pedido(
+                id=pedido.id,
+                cliente_id=pedido.cliente_id,
+                data=pedido.data,
+                estado=EstadoPedido.PRONTO,
+                valor=pedido.valor,
+                pago=pedido.pago,
+            )
+        )
+
+
 @pytest.fixture
 def db_dois_itens(db):
     repo = EstoqueRepository()

@@ -90,3 +90,79 @@ def test_remover_cliente_com_pedidos_levanta_erro_e_preserva_historico(db, repo)
 
         cur.execute("SELECT COUNT(*) FROM pedidos WHERE id = %s", (pedido.id,))
         assert cur.fetchone()[0] == 1
+
+
+def test_alterar_atualiza_nome_e_numero(db, repo):
+    cliente = repo.inserir(Cliente(nome="Original", numero="11000000000"))
+
+    atualizado = Cliente(id=cliente.id, nome="Atualizado", numero="11999999999")
+    resultado = repo.alterar(atualizado)
+
+    assert resultado.id == cliente.id
+    assert resultado.nome == "Atualizado"
+    assert resultado.numero == "11999999999"
+
+    with db.cursor() as cur:
+        cur.execute("SELECT nome, numero FROM clientes WHERE id = %s", (cliente.id,))
+        assert cur.fetchone() == ("Atualizado", "11999999999")
+
+
+def test_alterar_cliente_inexistente_levanta_erro(db, repo):
+    fantasma = Cliente(id=999999, nome="Ghost", numero="11000000000")
+
+    with pytest.raises(ValueError, match="não encontrado"):
+        repo.alterar(fantasma)
+
+
+def test_alterar_cliente_inativo_levanta_erro(db, repo):
+    cliente = repo.inserir(Cliente(nome="Para Inativar", numero="11777777777"))
+    repo.remover(cliente.id)
+
+    with pytest.raises(ValueError, match="inativo"):
+        repo.alterar(Cliente(id=cliente.id, nome="Novo", numero="11988888888"))
+
+
+def test_alterar_numero_duplicado_levanta_erro(db, repo):
+    existente = repo.inserir(Cliente(nome="Existente", numero="11111111111"))
+    outro = repo.inserir(Cliente(nome="Outro", numero="22222222222"))
+
+    with pytest.raises(ValueError, match="já cadastrado"):
+        repo.alterar(Cliente(id=outro.id, nome="Outro", numero="11111111111"))
+
+
+def test_buscar_por_nome_parcial_case_insensitive(db, repo):
+    ana = repo.inserir(Cliente(nome="Ana Paula", numero="11111111111"))
+    joana = repo.inserir(Cliente(nome="Joana", numero="12222222222"))
+    repo.inserir(Cliente(nome="Pedro", numero="13333333333"))
+
+    resultados = repo.buscar_por_nome("ana")
+
+    assert [r.id for r in resultados] == [ana.id, joana.id]
+
+
+def test_buscar_por_nome_ignora_inativos(db, repo):
+    ativo = repo.inserir(Cliente(nome="Carlos", numero="14444444444"))
+    inativo = repo.inserir(Cliente(nome="Carlos Eduardo", numero="15555555555"))
+    repo.remover(inativo.id)
+
+    resultados = repo.buscar_por_nome("carlos")
+
+    assert [r.id for r in resultados] == [ativo.id]
+
+
+def test_exibir_um_retorna_cliente_ativo(db, repo):
+    cliente = repo.inserir(Cliente(nome="Bianca", numero="16666666666"))
+
+    resultado = repo.exibir_um(cliente.id)
+
+    assert resultado is not None
+    assert resultado.id == cliente.id
+    assert resultado.nome == "Bianca"
+
+
+def test_exibir_um_inativo_ou_inexistente_retorna_none(db, repo):
+    cliente = repo.inserir(Cliente(nome="Inativar", numero="17777777777"))
+    repo.remover(cliente.id)
+
+    assert repo.exibir_um(cliente.id) is None
+    assert repo.exibir_um(999999) is None

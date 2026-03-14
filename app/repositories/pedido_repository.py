@@ -119,6 +119,88 @@ class PedidoRepository:
 
             conn.commit()
 
+    def exibir_um(self, pedido_id: int) -> Pedido | None:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, cliente_id, data, estado, valor, pago
+                    FROM pedidos
+                    WHERE id = %s
+                    """,
+                    (pedido_id,),
+                )
+                row = cur.fetchone()
+
+        if row is None:
+            return None
+
+        return Pedido(
+            id=row[0],
+            cliente_id=row[1],
+            data=row[2],
+            estado=EstadoPedido(row[3]),
+            valor=row[4],
+            pago=row[5],
+        )
+
+    def alterar(self, pedido: Pedido) -> Pedido:
+        if pedido.id is None:
+            raise ValueError("ID do pedido é obrigatório para alterar.")
+
+        ordem_estado = [EstadoPedido.EM_ANDAMENTO, EstadoPedido.PRONTO, EstadoPedido.ENTREGUE, EstadoPedido.CANCELADO]
+
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT estado, pago, cliente_id FROM pedidos WHERE id = %s FOR UPDATE",
+                    (pedido.id,),
+                )
+                row = cur.fetchone()
+
+                if row is None:
+                    raise ValueError("Pedido não encontrado.")
+
+                estado_atual = EstadoPedido(row[0])
+                pago_atual = row[1]
+                cliente_id = row[2]
+
+                cur.execute(
+                    "SELECT ativo FROM clientes WHERE id = %s FOR UPDATE",
+                    (cliente_id,),
+                )
+                cliente_row = cur.fetchone()
+                if cliente_row is None or cliente_row[0] is not True:
+                    raise ValueError("Pedido de cliente inativo não pode ser alterado.")
+
+                if estado_atual == EstadoPedido.CANCELADO:
+                    raise ValueError("Pedido cancelado não pode ser alterado.")
+
+                if pago_atual is True and pedido.pago is False:
+                    raise ValueError("Não é permitido retroceder pagamento.")
+
+                if ordem_estado.index(pedido.estado) < ordem_estado.index(estado_atual):
+                    raise ValueError("Não é permitido retroceder estado.")
+
+                if pedido.estado == EstadoPedido.CANCELADO and pedido.pago:
+                    raise ValueError("Pedido cancelado não pode ser marcado como pago.")
+
+                cur.execute(
+                    """
+                    UPDATE pedidos
+                    SET estado = %s, pago = %s
+                    WHERE id = %s
+                    RETURNING id, estado, pago
+                    """,
+                    (pedido.estado.value, pedido.pago, pedido.id),
+                )
+                updated = cur.fetchone()
+            conn.commit()
+
+        pedido.estado = EstadoPedido(updated[1])
+        pedido.pago = updated[2]
+        return pedido
+
     def _mesclar_itens(self, itens: list[PedidoItem]) -> list[PedidoItem]:
         """
         Une linhas com o mesmo item_id somando as quantidades.
