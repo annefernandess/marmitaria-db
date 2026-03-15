@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS pedido_itens (
     pedido_id  INT    NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
     item_id    INT    NOT NULL REFERENCES estoque(id),
     quantidade INT    NOT NULL DEFAULT 1 CHECK (quantidade > 0),
+    valor_unitario NUMERIC(10, 2) NOT NULL CHECK (valor_unitario > 0),
     CONSTRAINT uq_pedido_item UNIQUE (pedido_id, item_id)
 );
 
@@ -70,6 +71,13 @@ CREATE TABLE IF NOT EXISTS pedido_itens (
 DO $$ BEGIN
     ALTER TABLE pedido_itens ADD CONSTRAINT uq_pedido_item UNIQUE (pedido_id, item_id);
 EXCEPTION WHEN duplicate_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE pedido_itens ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(10, 2) NOT NULL DEFAULT 0;
+    ALTER TABLE pedido_itens ALTER COLUMN valor_unitario DROP DEFAULT;
+    ALTER TABLE pedido_itens ADD CONSTRAINT pedido_itens_valor_unitario_check CHECK (valor_unitario > 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
