@@ -114,6 +114,7 @@ class ClienteRepository:
         if updated is None:
             raise ValueError("Cliente não encontrado ou inativo.")
 
+        cliente.ativo = True
         return cliente
 
     def remover(self, cliente_id: int) -> None:
