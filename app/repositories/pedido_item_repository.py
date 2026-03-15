@@ -53,6 +53,26 @@ class PedidoItemRepository:
             valor_unitario=row[4],
         )
 
+    def _recalcular_total_pedido(self, cur, pedido_id: int) -> None:
+        """
+        Recalcula o valor total do pedido a partir dos itens associados
+        e atualiza a coluna ``pedidos.valor``.
+        """
+        cur.execute(
+            """
+            SELECT COALESCE(SUM(pi.quantidade * pi.valor_unitario), 0)
+            FROM pedido_itens pi
+            WHERE pi.pedido_id = %s
+            """,
+            (pedido_id,),
+        )
+        total = cur.fetchone()[0] or Decimal("0")
+
+        cur.execute(
+            "UPDATE pedidos SET valor = %s WHERE id = %s",
+            (total, pedido_id),
+        )
+
     def alterar(self, pedido_item: PedidoItem) -> PedidoItem:
         if pedido_item.id is None:
             raise ValueError("ID do item do pedido é obrigatório para alterar.")
@@ -163,20 +183,7 @@ class PedidoItemRepository:
                 )
                 updated = cur.fetchone()
 
-                cur.execute(
-                    """
-                    SELECT COALESCE(SUM(pi.quantidade * pi.valor_unitario), 0)
-                    FROM pedido_itens pi
-                    WHERE pi.pedido_id = %s
-                    """,
-                    (pedido_id_atual,),
-                )
-                total = cur.fetchone()[0] or Decimal("0")
-
-                cur.execute(
-                    "UPDATE pedidos SET valor = %s WHERE id = %s",
-                    (total, pedido_id_atual),
-                )
+                self._recalcular_total_pedido(cur, pedido_id_atual)
             conn.commit()
 
         return PedidoItem(
@@ -201,7 +208,7 @@ class PedidoItemRepository:
                     """
                     DELETE FROM pedido_itens
                     WHERE id = %s
-                    RETURNING item_id, quantidade
+                    RETURNING pedido_id, item_id, quantidade
                     """,
                     (pedido_item_id,),
                 )
@@ -211,7 +218,7 @@ class PedidoItemRepository:
                     conn.commit()
                     return
 
-                item_id, quantidade = row
+                pedido_id, item_id, quantidade = row
 
                 cur.execute(
                     """
@@ -221,5 +228,7 @@ class PedidoItemRepository:
                     """,
                     (quantidade, item_id),
                 )
+
+                self._recalcular_total_pedido(cur, pedido_id)
 
             conn.commit()
