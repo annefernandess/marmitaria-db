@@ -113,7 +113,7 @@ class EstoqueRepository:
                     UPDATE estoque
                     SET item = %s, quantidade_disponivel = %s, valor = %s
                     WHERE id = %s AND ativo = TRUE
-                    RETURNING id
+                    RETURNING id, item, quantidade_disponivel, valor, ativo
                     """,
                     (
                         estoque.item,
@@ -128,7 +128,13 @@ class EstoqueRepository:
         if updated is None:
             raise ValueError("Item de estoque não encontrado ou inativo.")
 
-        return estoque
+        return Estoque(
+            id=updated[0],
+            item=updated[1],
+            quantidade_disponivel=updated[2],
+            valor=updated[3],
+            ativo=updated[4],
+        )
 
     def remover(self, item_id: int) -> None:
         with get_connection() as conn:
