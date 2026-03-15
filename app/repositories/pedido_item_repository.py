@@ -60,9 +60,37 @@ class PedidoItemRepository:
         if pedido_item.quantidade <= 0:
             raise ValueError("A quantidade deve ser maior que zero.")
 
+        if pedido_item.pedido_id is None:
+            raise ValueError("ID do pedido é obrigatório para alterar item de pedido.")
+
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Trava pedido_itens
+                # Trava pedidos primeiro (e cliente) para padronizar ordem de locks
+                cur.execute(
+                    """
+                    SELECT p.estado, c.ativo
+                    FROM pedidos p
+                    JOIN clientes c ON c.id = p.cliente_id
+                    WHERE p.id = %s
+                    FOR UPDATE
+                    """,
+                    (pedido_item.pedido_id,),
+                )
+                pedido_info = cur.fetchone()
+
+                if pedido_info is None:
+                    raise ValueError("Pedido não encontrado para o item.")
+
+                estado_pedido = EstadoPedido(pedido_info[0])
+                cliente_ativo = pedido_info[1]
+
+                if estado_pedido in {EstadoPedido.PRONTO, EstadoPedido.ENTREGUE, EstadoPedido.CANCELADO}:
+                    raise ValueError("Não é permitido alterar itens em estado do pedido já finalizado.")
+
+                if not cliente_ativo:
+                    raise ValueError("Não é permitido alterar itens de cliente inativo.")
+
+                # Em seguida, trava o item de pedido específico
                 cur.execute(
                     """
                     SELECT pedido_id, item_id, quantidade, valor_unitario
@@ -79,30 +107,8 @@ class PedidoItemRepository:
 
                 pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
 
-                # Trava pedidos
-                cur.execute(
-                    """
-                    SELECT p.estado, c.ativo
-                    FROM pedidos p
-                    JOIN clientes c ON c.id = p.cliente_id
-                    WHERE p.id = %s
-                    FOR UPDATE
-                    """,
-                    (pedido_id_atual,),
-                )
-                pedido_info = cur.fetchone()
-
-                if pedido_info is None:
-                    raise ValueError("Pedido não encontrado para o item.")
-
-                estado_pedido = EstadoPedido(pedido_info[0])
-                cliente_ativo = pedido_info[1]
-
-                if estado_pedido in {EstadoPedido.PRONTO, EstadoPedido.ENTREGUE, EstadoPedido.CANCELADO}:
-                    raise ValueError("Não é permitido alterar itens em estado do pedido já finalizado.")
-
-                if not cliente_ativo:
-                    raise ValueError("Não é permitido alterar itens de cliente inativo.")
+                if pedido_id_atual != pedido_item.pedido_id:
+                    raise ValueError("Item de pedido não pertence ao pedido informado.")
 
                 if pedido_item.item_id != item_id_atual:
                     raise ValueError("Alteração de item_id não é suportada.")
