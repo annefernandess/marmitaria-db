@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS pedido_itens (
     pedido_id  INT    NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
     item_id    INT    NOT NULL REFERENCES estoque(id),
     quantidade INT    NOT NULL DEFAULT 1 CHECK (quantidade > 0),
+    valor_unitario NUMERIC(10, 2) NOT NULL CHECK (valor_unitario > 0),
     CONSTRAINT uq_pedido_item UNIQUE (pedido_id, item_id)
 );
 
@@ -73,7 +74,44 @@ EXCEPTION WHEN duplicate_table THEN NULL;
 END $$;
 
 DO $$ BEGIN
+    -- Garante coluna valor_unitario em bancos criados antes desta migração
+    ALTER TABLE pedido_itens ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(10, 2);
+
+    -- Backfill: preenche linhas antigas com um valor consistente do estoque
+    UPDATE pedido_itens pi
+    SET valor_unitario = e.valor
+    FROM estoque e
+    WHERE pi.item_id = e.id
+      AND pi.valor_unitario IS NULL;
+
+    -- Após o backfill, reforça NOT NULL na coluna
+    ALTER TABLE pedido_itens ALTER COLUMN valor_unitario SET NOT NULL;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    -- Recalcula o valor dos pedidos com base nos itens preenchidos
+    UPDATE pedidos p
+    SET valor = COALESCE(src.total, 0)
+    FROM (
+        SELECT
+            pi.pedido_id AS id,
+            SUM(pi.quantidade * pi.valor_unitario) AS total
+        FROM pedido_itens pi
+        GROUP BY pi.pedido_id
+    ) src
+    WHERE p.id = src.id;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
     ALTER TABLE pedidos ADD CONSTRAINT pedidos_valor_check CHECK (valor >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    -- Garante constraint de valor positivo para valor_unitario em bancos criados antes desta migração
+    ALTER TABLE pedido_itens ADD CONSTRAINT pedido_itens_valor_unitario_check CHECK (valor_unitario > 0);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
