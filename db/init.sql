@@ -74,9 +74,16 @@ EXCEPTION WHEN duplicate_table THEN NULL;
 END $$;
 
 DO $$ BEGIN
-    ALTER TABLE pedido_itens ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(10, 2) NOT NULL DEFAULT 0;
-    ALTER TABLE pedido_itens ALTER COLUMN valor_unitario DROP DEFAULT;
-    ALTER TABLE pedido_itens ADD CONSTRAINT pedido_itens_valor_unitario_check CHECK (valor_unitario > 0);
+    -- Garante coluna valor_unitario em bancos criados antes desta migração
+    ALTER TABLE pedido_itens ADD COLUMN IF NOT EXISTS valor_unitario NUMERIC(10, 2);
+
+    -- Backfill: garante que linhas antigas tenham um valor positivo
+    UPDATE pedido_itens
+    SET valor_unitario = 1
+    WHERE valor_unitario IS NULL;
+
+    -- Após o backfill, reforça NOT NULL na coluna
+    ALTER TABLE pedido_itens ALTER COLUMN valor_unitario SET NOT NULL;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
