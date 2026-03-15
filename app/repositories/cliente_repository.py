@@ -74,6 +74,17 @@ class ClienteRepository:
 
         with get_connection() as conn:
             with conn.cursor() as cur:
+                # Verifica se o cliente existe e está ativo antes de checar duplicidade
+                cur.execute(
+                    "SELECT ativo FROM clientes WHERE id = %s",
+                    (cliente.id,),
+                )
+                row = cur.fetchone()
+
+                if row is None or row[0] is not True:
+                    raise ValueError("Cliente não encontrado ou inativo.")
+
+                # Verifica se já existe outro cliente ativo com o mesmo número
                 cur.execute(
                     """
                     SELECT 1
