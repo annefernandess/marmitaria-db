@@ -150,6 +150,10 @@ class PedidoRepository:
             raise ValueError("ID do pedido é obrigatório para alterar.")
 
         ordem_estado = [EstadoPedido.EM_ANDAMENTO, EstadoPedido.PRONTO, EstadoPedido.ENTREGUE, EstadoPedido.CANCELADO]
+        transicoes_permitidas = {
+            EstadoPedido.EM_ANDAMENTO: {EstadoPedido.PRONTO, EstadoPedido.CANCELADO},
+            EstadoPedido.PRONTO: {EstadoPedido.ENTREGUE, EstadoPedido.CANCELADO},
+        }
 
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -177,11 +181,19 @@ class PedidoRepository:
                 if estado_atual == EstadoPedido.CANCELADO:
                     raise ValueError("Pedido cancelado não pode ser alterado.")
 
+                if estado_atual == EstadoPedido.ENTREGUE:
+                    raise ValueError("Pedido entregue não pode ser alterado.")
+
                 if pago_atual is True and pedido.pago is False:
                     raise ValueError("Não é permitido retroceder pagamento.")
 
                 if ordem_estado.index(pedido.estado) < ordem_estado.index(estado_atual):
                     raise ValueError("Não é permitido retroceder estado.")
+
+                if pedido.estado != estado_atual:
+                    permitidos = transicoes_permitidas.get(estado_atual, set())
+                    if pedido.estado not in permitidos:
+                        raise ValueError("Transição de estado não permitida.")
 
                 if pedido.estado == EstadoPedido.CANCELADO and pedido.pago:
                     raise ValueError("Pedido cancelado não pode ser marcado como pago.")
