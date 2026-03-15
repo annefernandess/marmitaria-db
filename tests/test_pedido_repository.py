@@ -332,6 +332,7 @@ def test_alterar_nao_permite_regredir_pagamento(db, repo, cliente, item_estoque)
         [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
     )
 
+    # Marca o pedido como pago
     repo.alterar(
         Pedido(
             id=pedido.id,
@@ -342,6 +343,19 @@ def test_alterar_nao_permite_regredir_pagamento(db, repo, cliente, item_estoque)
             pago=True,
         )
     )
+
+    # Tenta regredir pagamento para False, o que não deve ser permitido
+    with pytest.raises(ValueError, match="retroceder"):
+        repo.alterar(
+            Pedido(
+                id=pedido.id,
+                cliente_id=pedido.cliente_id,
+                data=pedido.data,
+                estado=EstadoPedido.PRONTO,
+                valor=pedido.valor,
+                pago=False,
+            )
+        )
 
 
 def test_alterar_falha_se_cliente_inativo(db, repo, cliente, item_estoque):
