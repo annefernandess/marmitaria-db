@@ -167,6 +167,17 @@ def test_alterar_bloqueia_itens_de_pedido_finalizado(db, repo, cliente, item_est
         [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
     )
 
+    # Avança para PRONTO e depois ENTREGUE 
+    pedido_repo.alterar(
+        Pedido(
+            id=pedido.id,
+            cliente_id=pedido.cliente_id,
+            data=pedido.data,
+            estado=EstadoPedido.PRONTO,
+            valor=pedido.valor,
+            pago=pedido.pago,
+        )
+    )
     pedido_repo.alterar(
         Pedido(
             id=pedido.id,
@@ -217,6 +228,17 @@ def test_alterar_usa_pedido_real_para_validar_estado(db, repo, cliente, item_est
     pedido_finalizado = pedido_repo.inserir(
         Pedido(cliente_id=cliente.id),
         [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+    # Avança para PRONTO e depois ENTREGUE (fluxo permitido)
+    pedido_repo.alterar(
+        Pedido(
+            id=pedido_finalizado.id,
+            cliente_id=pedido_finalizado.cliente_id,
+            data=pedido_finalizado.data,
+            estado=EstadoPedido.PRONTO,
+            valor=pedido_finalizado.valor,
+            pago=pedido_finalizado.pago,
+        )
     )
     pedido_repo.alterar(
         Pedido(
