@@ -62,47 +62,7 @@ class PedidoItemRepository:
 
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Busca dados atuais sem lock
-                cur.execute(
-                    """
-                    SELECT pedido_id, item_id, quantidade, valor_unitario
-                    FROM pedido_itens
-                    WHERE id = %s
-                    """,
-                    (pedido_item.id,),
-                )
-                atual = cur.fetchone()
-
-                if atual is None:
-                    raise ValueError("Item de pedido não encontrado.")
-
-                pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
-                delta = pedido_item.quantidade - qtd_atual
-
-                estoque_bloqueado = False
-                disponivel_estoque = None
-                ativo_estoque = None
-
-                # Se aumentar a quantidade, trava estoque antes para evitar deadlock
-                if delta > 0:
-                    cur.execute(
-                        "SELECT quantidade_disponivel, ativo FROM estoque WHERE id = %s FOR UPDATE",
-                        (pedido_item.item_id,),
-                    )
-                    row = cur.fetchone()
-                    if row is None:
-                        raise ValueError("Item do estoque não encontrado.")
-
-                    disponivel_estoque, ativo_estoque = row
-                    estoque_bloqueado = True
-
-                    if not ativo_estoque:
-                        raise ValueError("Item do estoque está inativo.")
-
-                    if disponivel_estoque < delta:
-                        raise ValueError("Estoque insuficiente para aumentar a quantidade do item.")
-
-                # Trava pedido_itens e pedidos (ordem: estoque -> pedido_itens -> pedidos)
+                # Trava pedido_itens
                 cur.execute(
                     """
                     SELECT pedido_id, item_id, quantidade, valor_unitario
@@ -113,31 +73,13 @@ class PedidoItemRepository:
                     (pedido_item.id,),
                 )
                 atual = cur.fetchone()
+
                 if atual is None:
                     raise ValueError("Item de pedido não encontrado (após lock).")
 
                 pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
 
-                # Recalcula delta com valores já bloqueados; se mudou, revalida estoque
-                delta = pedido_item.quantidade - qtd_atual
-
-                if delta > 0 and not estoque_bloqueado:
-                    cur.execute(
-                        "SELECT quantidade_disponivel, ativo FROM estoque WHERE id = %s FOR UPDATE",
-                        (pedido_item.item_id,),
-                    )
-                    row = cur.fetchone()
-                    if row is None:
-                        raise ValueError("Item do estoque não encontrado.")
-                    disponivel_estoque, ativo_estoque = row
-                    estoque_bloqueado = True
-
-                if delta > 0:
-                    if not ativo_estoque:
-                        raise ValueError("Item do estoque está inativo.")
-                    if disponivel_estoque < delta:
-                        raise ValueError("Estoque insuficiente para aumentar a quantidade do item.")
-
+                # Trava pedidos
                 cur.execute(
                     """
                     SELECT p.estado, c.ativo
@@ -164,6 +106,26 @@ class PedidoItemRepository:
 
                 if pedido_item.item_id != item_id_atual:
                     raise ValueError("Alteração de item_id não é suportada.")
+
+                # Recalcula delta já com linha bloqueada e, se precisar, só então trava estoque
+                delta = pedido_item.quantidade - qtd_atual
+
+                if delta > 0:
+                    cur.execute(
+                        "SELECT quantidade_disponivel, ativo FROM estoque WHERE id = %s FOR UPDATE",
+                        (pedido_item.item_id,),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        raise ValueError("Item do estoque não encontrado.")
+
+                    disponivel_estoque, ativo_estoque = row
+
+                    if not ativo_estoque:
+                        raise ValueError("Item do estoque está inativo.")
+
+                    if disponivel_estoque < delta:
+                        raise ValueError("Estoque insuficiente para aumentar a quantidade do item.")
 
                 if delta > 0:
                     cur.execute(
