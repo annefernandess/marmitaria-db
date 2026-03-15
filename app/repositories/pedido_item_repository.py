@@ -79,6 +79,10 @@ class PedidoItemRepository:
                 pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
                 delta = pedido_item.quantidade - qtd_atual
 
+                estoque_bloqueado = False
+                disponivel_estoque = None
+                ativo_estoque = None
+
                 # Se aumentar a quantidade, trava estoque antes para evitar deadlock
                 if delta > 0:
                     cur.execute(
@@ -89,11 +93,13 @@ class PedidoItemRepository:
                     if row is None:
                         raise ValueError("Item do estoque não encontrado.")
 
-                    disponivel, ativo = row
-                    if not ativo:
+                    disponivel_estoque, ativo_estoque = row
+                    estoque_bloqueado = True
+
+                    if not ativo_estoque:
                         raise ValueError("Item do estoque está inativo.")
 
-                    if disponivel < delta:
+                    if disponivel_estoque < delta:
                         raise ValueError("Estoque insuficiente para aumentar a quantidade do item.")
 
                 # Trava pedido_itens e pedidos (ordem: estoque -> pedido_itens -> pedidos)
@@ -111,6 +117,26 @@ class PedidoItemRepository:
                     raise ValueError("Item de pedido não encontrado (após lock).")
 
                 pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
+
+                # Recalcula delta com valores já bloqueados; se mudou, revalida estoque
+                delta = pedido_item.quantidade - qtd_atual
+
+                if delta > 0 and not estoque_bloqueado:
+                    cur.execute(
+                        "SELECT quantidade_disponivel, ativo FROM estoque WHERE id = %s FOR UPDATE",
+                        (pedido_item.item_id,),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        raise ValueError("Item do estoque não encontrado.")
+                    disponivel_estoque, ativo_estoque = row
+                    estoque_bloqueado = True
+
+                if delta > 0:
+                    if not ativo_estoque:
+                        raise ValueError("Item do estoque está inativo.")
+                    if disponivel_estoque < delta:
+                        raise ValueError("Estoque insuficiente para aumentar a quantidade do item.")
 
                 cur.execute(
                     """
