@@ -1,8 +1,8 @@
 from decimal import Decimal
 
 from app.database import get_connection
-from app.models.pedido_item import PedidoItem
 from app.models.enums import EstadoPedido
+from app.models.pedido_item import PedidoItem
 
 
 class PedidoItemRepository:
@@ -11,7 +11,7 @@ class PedidoItemRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, pedido_id, item_id, quantidade
+                    SELECT id, pedido_id, item_id, quantidade, valor_unitario
                     FROM pedido_itens
                     ORDER BY id
                     """
@@ -24,6 +24,7 @@ class PedidoItemRepository:
                 pedido_id=row[1],
                 item_id=row[2],
                 quantidade=row[3],
+                valor_unitario=row[4],
             )
             for row in rows
         ]
@@ -33,7 +34,7 @@ class PedidoItemRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, pedido_id, item_id, quantidade
+                    SELECT id, pedido_id, item_id, quantidade, valor_unitario
                     FROM pedido_itens
                     WHERE id = %s
                     """,
@@ -44,7 +45,13 @@ class PedidoItemRepository:
         if row is None:
             return None
 
-        return PedidoItem(id=row[0], pedido_id=row[1], item_id=row[2], quantidade=row[3])
+        return PedidoItem(
+            id=row[0],
+            pedido_id=row[1],
+            item_id=row[2],
+            quantidade=row[3],
+            valor_unitario=row[4],
+        )
 
     def alterar(self, pedido_item: PedidoItem) -> PedidoItem:
         if pedido_item.id is None:
@@ -55,12 +62,12 @@ class PedidoItemRepository:
 
         with get_connection() as conn:
             with conn.cursor() as cur:
+                # Busca dados atuais sem lock
                 cur.execute(
                     """
-                    SELECT pedido_id, item_id, quantidade
+                    SELECT pedido_id, item_id, quantidade, valor_unitario
                     FROM pedido_itens
                     WHERE id = %s
-                    FOR UPDATE
                     """,
                     (pedido_item.id,),
                 )
@@ -69,7 +76,41 @@ class PedidoItemRepository:
                 if atual is None:
                     raise ValueError("Item de pedido não encontrado.")
 
-                pedido_id_atual, item_id_atual, qtd_atual = atual
+                pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
+                delta = pedido_item.quantidade - qtd_atual
+
+                # Se aumentar a quantidade, trava estoque antes para evitar deadlock
+                if delta > 0:
+                    cur.execute(
+                        "SELECT quantidade_disponivel, ativo FROM estoque WHERE id = %s FOR UPDATE",
+                        (pedido_item.item_id,),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        raise ValueError("Item do estoque não encontrado.")
+
+                    disponivel, ativo = row
+                    if not ativo:
+                        raise ValueError("Item do estoque está inativo.")
+
+                    if disponivel < delta:
+                        raise ValueError("Estoque insuficiente para aumentar a quantidade do item.")
+
+                # Trava pedido_itens e pedidos (ordem: estoque -> pedido_itens -> pedidos)
+                cur.execute(
+                    """
+                    SELECT pedido_id, item_id, quantidade, valor_unitario
+                    FROM pedido_itens
+                    WHERE id = %s
+                    FOR UPDATE
+                    """,
+                    (pedido_item.id,),
+                )
+                atual = cur.fetchone()
+                if atual is None:
+                    raise ValueError("Item de pedido não encontrado (após lock).")
+
+                pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
 
                 cur.execute(
                     """
@@ -98,24 +139,7 @@ class PedidoItemRepository:
                 if pedido_item.item_id != item_id_atual:
                     raise ValueError("Alteração de item_id não é suportada.")
 
-                delta = pedido_item.quantidade - qtd_atual
-
                 if delta > 0:
-                    cur.execute(
-                        "SELECT quantidade_disponivel, ativo FROM estoque WHERE id = %s FOR UPDATE",
-                        (pedido_item.item_id,),
-                    )
-                    row = cur.fetchone()
-                    if row is None:
-                        raise ValueError("Item do estoque não encontrado.")
-
-                    disponivel, ativo = row
-                    if not ativo:
-                        raise ValueError("Item do estoque está inativo.")
-
-                    if disponivel < delta:
-                        raise ValueError("Estoque insuficiente para aumentar a quantidade do item.")
-
                     cur.execute(
                         """
                         UPDATE estoque
@@ -139,7 +163,7 @@ class PedidoItemRepository:
                     UPDATE pedido_itens
                     SET quantidade = %s
                     WHERE id = %s
-                    RETURNING id, pedido_id, item_id, quantidade
+                    RETURNING id, pedido_id, item_id, quantidade, valor_unitario
                     """,
                     (pedido_item.quantidade, pedido_item.id),
                 )
@@ -147,9 +171,8 @@ class PedidoItemRepository:
 
                 cur.execute(
                     """
-                    SELECT COALESCE(SUM(pi.quantidade * e.valor), 0)
+                    SELECT COALESCE(SUM(pi.quantidade * pi.valor_unitario), 0)
                     FROM pedido_itens pi
-                    JOIN estoque e ON e.id = pi.item_id
                     WHERE pi.pedido_id = %s
                     """,
                     (pedido_id_atual,),
@@ -167,6 +190,7 @@ class PedidoItemRepository:
             pedido_id=updated[1],
             item_id=updated[2],
             quantidade=updated[3],
+            valor_unitario=updated[4],
         )
 
     def remover(self, pedido_item_id: int) -> None:
