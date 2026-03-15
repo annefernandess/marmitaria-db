@@ -23,7 +23,7 @@ class PedidoRepository:
         with get_connection() as conn:
             with conn.cursor() as cur:
                 self._validar_cliente(cur, pedido.cliente_id)
-                self._validar_e_calcular(cur, pedido, itens)
+                valor_por_item = self._validar_e_calcular(cur, pedido, itens)
 
                 cur.execute(
                     """
@@ -43,13 +43,14 @@ class PedidoRepository:
 
                 for item in itens:
                     item.pedido_id = pedido.id
+                    item.valor_unitario = valor_por_item[item.item_id]
                     cur.execute(
                         """
-                        INSERT INTO pedido_itens (pedido_id, item_id, quantidade)
-                        VALUES (%s, %s, %s)
+                        INSERT INTO pedido_itens (pedido_id, item_id, quantidade, valor_unitario)
+                        VALUES (%s, %s, %s, %s)
                         RETURNING id
                         """,
-                        (item.pedido_id, item.item_id, item.quantidade),
+                        (item.pedido_id, item.item_id, item.quantidade, item.valor_unitario),
                     )
                     item.id = cur.fetchone()[0]
 
@@ -219,7 +220,7 @@ class PedidoRepository:
                 result.append(item)
         return result
 
-    def _validar_e_calcular(self, cur, pedido: Pedido, itens: list[PedidoItem]) -> None:
+    def _validar_e_calcular(self, cur, pedido: Pedido, itens: list[PedidoItem]) -> dict[int, Decimal]:
         """
         Verifica disponibilidade no estoque e calcula o valor total do pedido.
 
@@ -234,6 +235,7 @@ class PedidoRepository:
             qtd_por_item[item.item_id] = qtd_por_item.get(item.item_id, 0) + item.quantidade
 
         total = Decimal("0")
+        valor_por_item: dict[int, Decimal] = {}
 
         for item_id, qtd_total in qtd_por_item.items():
             cur.execute(
@@ -256,9 +258,12 @@ class PedidoRepository:
                     f"disponível={qtd_disponivel}, solicitado={qtd_total}."
                 )
 
-            total += Decimal(str(valor_unitario)) * qtd_total
+            valor = Decimal(str(valor_unitario))
+            valor_por_item[item_id] = valor
+            total += valor * qtd_total
 
         pedido.valor = total
+        return valor_por_item
 
     def _validar_cliente(self, cur, cliente_id: int) -> None:
         cur.execute(
