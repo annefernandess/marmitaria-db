@@ -173,35 +173,67 @@ export default function EstoquePage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <input
-              value={form.item}
-              onChange={(e) => setForm((prev) => ({ ...prev, item: e.target.value }))}
-              placeholder="Nome do item"
-              required
-              className="rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
-            />
-            <input
-              value={form.quantidade_disponivel}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  quantidade_disponivel: e.target.value,
-                }))
-              }
-              type="number"
-              min="0"
-              required
-              className="rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
-            />
-            <input
-              value={form.valor}
-              onChange={(e) => setForm((prev) => ({ ...prev, valor: e.target.value }))}
-              type="number"
-              min="0.01"
-              step="0.01"
-              required
-              className="rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
-            />
+            <div>
+              <label
+                htmlFor="item"
+                className="mb-2 block text-xs font-medium uppercase tracking-wider text-[#1B2A4A]/40"
+              >
+                Produto
+              </label>
+              <input
+                id="item"
+                value={form.item}
+                onChange={(e) => setForm((prev) => ({ ...prev, item: e.target.value }))}
+                placeholder="Nome do item"
+                required
+                className="w-full rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="quantidade_disponivel"
+                className="mb-2 block text-xs font-medium uppercase tracking-wider text-[#1B2A4A]/40"
+              >
+                Quantidade
+              </label>
+              <input
+                id="quantidade_disponivel"
+                value={form.quantidade_disponivel}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    quantidade_disponivel: e.target.value,
+                  }))
+                }
+                type="number"
+                min="0"
+                required
+                className="w-full rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="valor"
+                className="mb-2 block text-xs font-medium uppercase tracking-wider text-[#1B2A4A]/40"
+              >
+                Valor
+              </label>
+              <input
+                id="valor"
+                value={form.valor}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    valor: e.target.value.replace(",", "."),
+                  }))
+                }
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                required
+                className="w-full rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
+              />
+            </div>
           </div>
 
           <div className="mt-4 flex items-center justify-end gap-3">
