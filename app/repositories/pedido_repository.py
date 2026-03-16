@@ -231,6 +231,16 @@ class PedidoRepository:
                             """,
                             (quantidade, item_id),
                         )
+
+                    # Após remover todos os itens do pedido, o valor total deve ser zerado
+                    cur.execute(
+                        """
+                        UPDATE pedidos
+                        SET valor = 0
+                        WHERE id = %s
+                        """,
+                        (pedido.id,),
+                    )
             conn.commit()
 
         pedido.estado = EstadoPedido(updated[1])
