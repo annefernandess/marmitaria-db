@@ -209,13 +209,15 @@ class PedidoRepository:
                 )
                 updated = cur.fetchone()
 
-                # Se o pedido foi cancelado, devolve as quantidades ao estoque.
-                if estado_atual != EstadoPedido.CANCELADO and pedido.estado == EstadoPedido.CANCELADO:
+                # Utiliza DELETE ... RETURNING para evitar restaurar o estoque em dobro
+                # caso o mesmo pedido seja posteriormente removido
+                # (remover() também deleta itens e restaura estoque).
+                if pedido.estado == EstadoPedido.CANCELADO:
                     cur.execute(
                         """
-                        SELECT item_id, quantidade
-                        FROM pedido_itens
+                        DELETE FROM pedido_itens
                         WHERE pedido_id = %s
+                        RETURNING item_id, quantidade
                         """,
                         (pedido.id,),
                     )
