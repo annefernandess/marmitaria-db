@@ -85,10 +85,11 @@ erDiagram
     }
 
     pedido_itens {
-        serial id        PK
-        int    pedido_id FK
-        int    item_id   FK
-        int    quantidade
+        serial  id             PK
+        int     pedido_id      FK
+        int     item_id        FK
+        int     quantidade
+        numeric valor_unitario
     }
 
     estoque {
@@ -99,9 +100,21 @@ erDiagram
         boolean ativo
     }
 
+    usuarios {
+        serial  id         PK
+        varchar nome
+        varchar email
+        varchar senha
+        varchar numero
+        varchar role
+        int     cliente_id FK
+        boolean ativo
+    }
+
     clientes    ||--o{ pedidos      : "realiza"
     pedidos     ||--|{ pedido_itens : "contém"
     estoque     ||--o{ pedido_itens : "referenciado em"
+    clientes    ||--o| usuarios     : "vincula"
 ```
 
 ### Tabelas
@@ -157,10 +170,33 @@ Cada linha representa um item dentro de um pedido.
 | pedido_id | `INT` | `NOT NULL`, `FK → pedidos(id) ON DELETE CASCADE` |
 | item_id | `INT` | `NOT NULL`, `FK → estoque(id)` |
 | quantidade | `INT` | `NOT NULL`, `> 0`, default `1` |
+| valor_unitario | `NUMERIC(10,2)` | `NOT NULL`, `> 0` |
 
 **Índices:** `idx_pedido_itens_pedido`, `idx_pedido_itens_item`
 
+**Restrição adicional:** `UNIQUE (pedido_id, item_id)` para impedir o mesmo item duplicado no mesmo pedido.
+
 > O `ON DELETE CASCADE` garante que ao remover um pedido, todos os seus itens são removidos automaticamente.
+
+---
+
+#### `usuarios`
+Tabela de autenticação e autorização da aplicação.
+
+| Coluna | Tipo | Restrições |
+|--------|------|------------|
+| id | `SERIAL` | `PRIMARY KEY` |
+| nome | `VARCHAR(255)` | `NOT NULL` |
+| email | `VARCHAR(255)` | `NOT NULL`, `UNIQUE` |
+| senha | `VARCHAR(255)` | `NOT NULL` |
+| numero | `VARCHAR(20)` | `NOT NULL` |
+| role | `VARCHAR(20)` | `NOT NULL`, default `'user'`, `CHECK (role IN ('admin', 'user'))` |
+| cliente_id | `INT` | `NULL`, `FK → clientes(id)` |
+| ativo | `BOOLEAN` | `NOT NULL`, default `true` |
+
+**Índices:** `idx_usuarios_email`, `idx_usuarios_email_unique`
+
+**Seed padrão:** usuário admin `yao@lanches.com`
 
 ---
 
@@ -171,9 +207,12 @@ Cada linha representa um item dentro de um pedido.
 | Estoque nunca negativo | `CHECK (quantidade_disponivel >= 0)` |
 | Valor do item sempre positivo | `CHECK (valor > 0)` |
 | Quantidade de item no pedido > 0 | `CHECK (quantidade > 0)` |
+| Valor unitário do item no pedido > 0 | `CHECK (valor_unitario > 0)` |
 | Estado do pedido restrito | `ENUM` com valores fixos |
+| Papel do usuário restrito | `CHECK (role IN ('admin', 'user'))` |
 | Pedido sempre vinculado a um cliente | `NOT NULL REFERENCES clientes(id)` |
 | Itens orfãos removidos com o pedido | `ON DELETE CASCADE` em `pedido_itens` |
+| E-mail de usuário único | `UNIQUE` em `usuarios.email` |
 
 ---
 
@@ -219,7 +258,9 @@ classDiagram
         +int pedido_id
         +int item_id
         +int quantidade
+        +Decimal valor_unitario
         +inserir()
+        +alterar()
         +remover()
         +listar_por_pedido(pedido_id) List
     }
@@ -243,6 +284,20 @@ classDiagram
         EM_ANDAMENTO
         PRONTO
         ENTREGUE
+        CANCELADO
+    }
+
+    class Usuario {
+        +int id
+        +str nome
+        +str email
+        +str senha
+        +str numero
+        +str role
+        +int cliente_id
+        +bool ativo
+        +cadastrar()
+        +autenticar(email, senha)
     }
 
     class Database {
@@ -255,9 +310,11 @@ classDiagram
     Pedido "1" --> "1..*" PedidoItem : contém
     PedidoItem "0..*" --> "1" Estoque : referencia
     Pedido --> "1" EstadoPedido : estado
+    Usuario "0..*" --> "0..1" Cliente : vincula
     Cliente ..> Database : usa
     Pedido ..> Database : usa
     Estoque ..> Database : usa
+    Usuario ..> Database : usa
 ```
 
 **Regra de negócio (remoção lógica de Cliente):** clientes não são removidos fisicamente do banco. Quando o cliente **não possui pedidos vinculados**, o método `remover()` deve **inativar** o cliente (ex.: `ativo = false`) para preservar o histórico e permitir reativação futura. Quando o cliente **possui pedidos vinculados**, o método `remover()` deve lançar uma exceção e **não** permitir a remoção/inativação, garantindo a preservação do histórico de pedidos e relatórios. Métodos de listagem devem considerar apenas clientes ativos.
@@ -270,7 +327,8 @@ classDiagram
 |---|---|---|
 | `Cliente` | `clientes` | Cadastro de clientes da marmitaria (remoção lógica via campo `ativo`) |
 | `Pedido` | `pedidos` | Pedidos realizados pelos clientes |
-| `PedidoItem` | `pedido_itens` | Itens de cada pedido (N:N entre pedidos e estoque) |
+| `PedidoItem` | `pedido_itens` | Itens de cada pedido (N:N entre pedidos e estoque), com quantidade e valor unitário congelado no momento da compra |
 | `Estoque` | `estoque` | Cardápio de itens disponíveis com preço e quantidade (Yao) |
-| `EstadoPedido` | — | Enum: `EM_ANDAMENTO`, `PRONTO`, `ENTREGUE` |
+| `Usuario` | `usuarios` | Usuários de autenticação, com papel `admin` ou `user` e vínculo opcional com `Cliente` |
+| `EstadoPedido` | — | Enum: `EM_ANDAMENTO`, `PRONTO`, `ENTREGUE`, `CANCELADO` |
 | `Database` | — | Gerencia a conexão com o PostgreSQL |
