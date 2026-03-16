@@ -208,6 +208,39 @@ class PedidoRepository:
                     (pedido.estado.value, pedido.pago, pedido.id),
                 )
                 updated = cur.fetchone()
+
+                # Utiliza DELETE ... RETURNING para evitar restaurar o estoque em dobro
+                # caso o mesmo pedido seja posteriormente removido
+                # (remover() também deleta itens e restaura estoque).
+                if pedido.estado == EstadoPedido.CANCELADO:
+                    cur.execute(
+                        """
+                        DELETE FROM pedido_itens
+                        WHERE pedido_id = %s
+                        RETURNING item_id, quantidade
+                        """,
+                        (pedido.id,),
+                    )
+                    itens = cur.fetchall()
+                    for item_id, quantidade in itens:
+                        cur.execute(
+                            """
+                            UPDATE estoque
+                            SET quantidade_disponivel = quantidade_disponivel + %s
+                            WHERE id = %s
+                            """,
+                            (quantidade, item_id),
+                        )
+
+                    # Após remover todos os itens do pedido, o valor total deve ser zerado
+                    cur.execute(
+                        """
+                        UPDATE pedidos
+                        SET valor = 0
+                        WHERE id = %s
+                        """,
+                        (pedido.id,),
+                    )
             conn.commit()
 
         pedido.estado = EstadoPedido(updated[1])
