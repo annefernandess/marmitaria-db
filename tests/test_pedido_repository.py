@@ -358,6 +358,38 @@ def test_alterar_nao_permite_regredir_pagamento(db, repo, cliente, item_estoque)
         )
 
 
+
+def test_alterar_para_cancelado_restaura_estoque(db, repo, cliente, item_estoque):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id, estado=EstadoPedido.EM_ANDAMENTO),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=4)],
+    )
+
+    with db.cursor() as cur:
+        cur.execute("SELECT quantidade_disponivel FROM estoque WHERE id = %s", (item_estoque.id,))
+        assert cur.fetchone()[0] == 6  # 10 - 4
+
+    resultado = repo.alterar(
+        Pedido(
+            id=pedido.id,
+            cliente_id=pedido.cliente_id,
+            data=pedido.data,
+            estado=EstadoPedido.CANCELADO,
+            valor=pedido.valor,
+            pago=False,
+        )
+    )
+
+    assert resultado.estado == EstadoPedido.CANCELADO
+
+    with db.cursor() as cur:
+        cur.execute("SELECT quantidade_disponivel FROM estoque WHERE id = %s", (item_estoque.id,))
+        assert cur.fetchone()[0] == 10  # estoque restaurado
+
+        cur.execute("SELECT COUNT(*) FROM pedido_itens WHERE pedido_id = %s", (pedido.id,))
+        assert cur.fetchone()[0] == 0  # itens removidos ao cancelar
+
+
 def test_alterar_falha_se_cliente_inativo(db, repo, cliente, item_estoque):
     pedido = repo.inserir(
         Pedido(cliente_id=cliente.id),
