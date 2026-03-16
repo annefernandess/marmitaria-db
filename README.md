@@ -141,7 +141,7 @@ Cardápio de itens disponíveis na loja (Yao).
 | valor | `NUMERIC(10,2)` | `NOT NULL`, default `0` |
 | pago | `BOOLEAN` | `NOT NULL`, default `false` |
 
-**Tipo ENUM `estado_pedido`:** `EM_ANDAMENTO` → `PRONTO` → `ENTREGUE`
+**Tipo ENUM `estado_pedido`:** `EM_ANDAMENTO` → `PRONTO` → `ENTREGUE` → `CANCELADO`
 
 **Índices:** `idx_pedidos_cliente_id`, `idx_pedidos_estado`
 
