@@ -44,6 +44,47 @@ ALTER TABLE IF EXISTS estoque
     ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- ------------------------------------------------------------
+--  Usuários (autenticação)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS usuarios (
+    id         SERIAL       PRIMARY KEY,
+    nome       VARCHAR(255) NOT NULL,
+    email      VARCHAR(255) NOT NULL UNIQUE,
+    senha      VARCHAR(255) NOT NULL,
+    numero     VARCHAR(20)  NOT NULL,
+    role       VARCHAR(20)  NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+    cliente_id INT          NULL REFERENCES clientes(id),
+    ativo      BOOLEAN      NOT NULL DEFAULT TRUE
+);
+
+ALTER TABLE IF EXISTS usuarios
+    ADD COLUMN IF NOT EXISTS cliente_id INT NULL REFERENCES clientes(id);
+
+ALTER TABLE IF EXISTS usuarios
+    ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE IF EXISTS usuarios
+    ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user';
+
+ALTER TABLE IF EXISTS usuarios
+    ADD COLUMN IF NOT EXISTS numero VARCHAR(20) NOT NULL DEFAULT '';
+
+ALTER TABLE IF EXISTS usuarios
+    ADD COLUMN IF NOT EXISTS senha VARCHAR(255) NOT NULL DEFAULT '';
+
+ALTER TABLE IF EXISTS usuarios
+    ADD COLUMN IF NOT EXISTS nome VARCHAR(255) NOT NULL DEFAULT '';
+
+ALTER TABLE IF EXISTS usuarios
+    ADD COLUMN IF NOT EXISTS email VARCHAR(255) NOT NULL DEFAULT '';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_email_unique ON usuarios(email);
+
+INSERT INTO usuarios (nome, email, senha, numero, role, cliente_id, ativo)
+VALUES ('YAO Admin', 'yao@lanches.com', 'admin', '00000000000', 'admin', NULL, TRUE)
+ON CONFLICT (email) DO NOTHING;
+
+-- ------------------------------------------------------------
 --  Pedidos
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS pedidos (
@@ -119,6 +160,7 @@ END $$;
 --  Índices úteis para as buscas mais comuns
 -- ------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_clientes_nome        ON clientes(nome);
+CREATE INDEX IF NOT EXISTS idx_usuarios_email       ON usuarios(email);
 CREATE INDEX IF NOT EXISTS idx_pedidos_cliente_id   ON pedidos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_pedidos_estado       ON pedidos(estado);
 CREATE INDEX IF NOT EXISTS idx_pedido_itens_pedido  ON pedido_itens(pedido_id);

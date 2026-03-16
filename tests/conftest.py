@@ -59,11 +59,31 @@ def db(monkeypatch):
     conn.autocommit = False
     wrapped = _NoCommitConn(conn)
 
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            TRUNCATE TABLE
+                pedido_itens,
+                pedidos,
+                usuarios,
+                clientes,
+                estoque
+            RESTART IDENTITY CASCADE
+            """
+        )
+        cur.execute(
+            """
+            INSERT INTO usuarios (nome, email, senha, numero, role, cliente_id, ativo)
+            VALUES ('YAO Admin', 'yao@lanches.com', 'admin', '00000000000', 'admin', NULL, TRUE)
+            """
+        )
+
     mock = lambda: wrapped  # noqa: E731
     monkeypatch.setattr("app.repositories.cliente_repository.get_connection", mock)
     monkeypatch.setattr("app.repositories.estoque_repository.get_connection", mock)
     monkeypatch.setattr("app.repositories.pedido_repository.get_connection", mock)
     monkeypatch.setattr("app.repositories.pedido_item_repository.get_connection", mock)
+    monkeypatch.setattr("app.repositories.usuario_repository.get_connection", mock)
 
     yield wrapped
 

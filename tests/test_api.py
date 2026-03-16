@@ -26,6 +26,92 @@ def test_healthcheck_retorna_status_ok(client):
     assert response.json() == {"status": "ok"}
 
 
+def test_auth_cadastra_usuario_e_retorna_cliente_vinculado(client, db):
+    response = client.post(
+        "/auth/register",
+        json={
+            "nome": "Maria Cliente",
+            "email": "maria@cliente.com",
+            "senha": "123456",
+            "numero": "11999990001",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["nome"] == "Maria Cliente"
+    assert response.json()["email"] == "maria@cliente.com"
+    assert response.json()["numero"] == "11999990001"
+    assert response.json()["role"] == "user"
+    assert response.json()["cliente_id"] is not None
+
+    with db.cursor() as cur:
+        cur.execute(
+            "SELECT nome, numero FROM clientes WHERE id = %s",
+            (response.json()["cliente_id"],),
+        )
+        assert cur.fetchone() == ("Maria Cliente", "11999990001")
+
+
+def test_auth_login_retorna_usuario_cadastrado(client):
+    registered = client.post(
+        "/auth/register",
+        json={
+            "nome": "João Login",
+            "email": "joao@login.com",
+            "senha": "abc123",
+            "numero": "11888880002",
+        },
+    )
+
+    response = client.post(
+        "/auth/login",
+        json={"email": "joao@login.com", "senha": "abc123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == registered.json()["id"]
+    assert response.json()["nome"] == "João Login"
+    assert response.json()["email"] == "joao@login.com"
+    assert response.json()["numero"] == "11888880002"
+    assert response.json()["cliente_id"] == registered.json()["cliente_id"]
+
+
+def test_auth_nao_permita_email_duplicado(client):
+    client.post(
+        "/auth/register",
+        json={
+            "nome": "Primeiro",
+            "email": "duplicado@cliente.com",
+            "senha": "123456",
+            "numero": "11777770003",
+        },
+    )
+
+    response = client.post(
+        "/auth/register",
+        json={
+            "nome": "Segundo",
+            "email": "duplicado@cliente.com",
+            "senha": "654321",
+            "numero": "11666660004",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "email" in response.json()["detail"].lower()
+
+
+def test_auth_login_admin_seedado(client):
+    response = client.post(
+        "/auth/login",
+        json={"email": "yao@lanches.com", "senha": "admin"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "admin"
+    assert response.json()["cliente_id"] is None
+
+
 def test_clientes_cria_lista_busca_e_exibe_um(client):
     created = client.post(
         "/clientes",

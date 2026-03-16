@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { formatCurrency, getErrorMessage } from "@/lib/format";
-import type { Cliente, EstoqueItem, Pedido } from "@/lib/types";
+import type { EstoqueItem, Pedido } from "@/lib/types";
 
 interface CartItem {
   menuItem: EstoqueItem;
@@ -35,9 +35,8 @@ export default function PedidoPage() {
   const [submitting, setSubmitting] = useState(false);
   const [consultandoPedidos, setConsultandoPedidos] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [nomeCliente, setNomeCliente] = useState(user?.nome ?? "");
-  const [numeroCliente, setNumeroCliente] = useState("");
   const [meusPedidos, setMeusPedidos] = useState<Pedido[]>([]);
+  const nomeCliente = user?.nome.trim() ?? "";
 
   useEffect(() => {
     async function loadCardapio() {
@@ -58,7 +57,7 @@ export default function PedidoPage() {
 
   useEffect(() => {
     async function loadMeusPedidos() {
-      const nome = nomeCliente.trim();
+      const nome = user?.nome.trim() ?? "";
       if (nome.length < 2) {
         setMeusPedidos([]);
         return;
@@ -83,7 +82,7 @@ export default function PedidoPage() {
     }
 
     void loadMeusPedidos();
-  }, [nomeCliente]);
+  }, [user?.nome]);
 
   function addToCart(item: EstoqueItem) {
     setCart((prev) => {
@@ -123,8 +122,8 @@ export default function PedidoPage() {
   const pedidosProntos = meusPedidos.filter((pedido) => pedido.estado === "PRONTO");
 
   async function handleEnviarPedido() {
-    if (!nomeCliente.trim() || !numeroCliente.trim()) {
-      setError("Informe nome e número antes de enviar o pedido.");
+    if (!user?.clienteId) {
+      setError("Seu cadastro não possui um cliente vinculado para fazer pedidos.");
       return;
     }
 
@@ -137,18 +136,10 @@ export default function PedidoPage() {
       setSubmitting(true);
       setError(null);
 
-      const cliente = await apiFetch<Cliente>("/clientes", {
-        method: "POST",
-        body: JSON.stringify({
-          nome: nomeCliente.trim(),
-          numero: numeroCliente.trim(),
-        }),
-      });
-
       await apiFetch("/pedidos", {
         method: "POST",
         body: JSON.stringify({
-          cliente_id: cliente.id,
+          cliente_id: user.clienteId,
           itens: cartItems.map((item) => ({
             item_id: item.menuItem.id,
             quantidade: item.quantidade,
@@ -161,15 +152,14 @@ export default function PedidoPage() {
       const [refreshedCardapio, pedidosCliente] = await Promise.all([
         apiFetch<EstoqueItem[]>("/estoque"),
         apiFetch<Pedido[]>("/pedidos", {
-          query: { cliente_nome: nomeCliente.trim() },
+          query: { cliente_nome: nomeCliente },
         }),
       ]);
       setCardapio(refreshedCardapio);
       setMeusPedidos(
         pedidosCliente.filter(
           (pedido) =>
-            pedido.cliente_nome.trim().toLowerCase() ===
-            nomeCliente.trim().toLowerCase()
+            pedido.cliente_nome.trim().toLowerCase() === nomeCliente.toLowerCase()
         )
       );
       setTimeout(() => setPedidoEnviado(false), 3000);
@@ -236,31 +226,6 @@ export default function PedidoPage() {
             </div>
           )}
 
-          <div className="mb-6 grid gap-4 rounded-2xl border border-[#F5C451]/20 bg-white/80 p-5 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
-                Nome do cliente
-              </label>
-              <input
-                value={nomeCliente}
-                onChange={(e) => setNomeCliente(e.target.value)}
-                placeholder="Seu nome"
-                className="w-full rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
-                Número / telefone
-              </label>
-              <input
-                value={numeroCliente}
-                onChange={(e) => setNumeroCliente(e.target.value)}
-                placeholder="Seu contato"
-                className="w-full rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
-              />
-            </div>
-          </div>
-
           <div className="mb-6 grid gap-4 lg:grid-cols-[1.1fr_1fr]">
             <div className="rounded-2xl border border-[#F5C451]/20 bg-white/80 p-5">
               <div className="flex items-center justify-between gap-3">
@@ -269,7 +234,7 @@ export default function PedidoPage() {
                     Meus pedidos
                   </h2>
                   <p className="mt-1 text-sm text-[#1B2A4A]/50">
-                    Digite seu nome para acompanhar o status dos seus pedidos.
+                    Acompanhe aqui o status dos seus pedidos cadastrados.
                   </p>
                 </div>
                 {consultandoPedidos ? (
@@ -314,7 +279,7 @@ export default function PedidoPage() {
                 </div>
               ) : (
                 <div className="mt-4 rounded-xl border border-dashed border-[#F5C451]/20 bg-[#FFF5E6]/30 px-4 py-6 text-center text-sm text-[#1B2A4A]/45">
-                  Nenhum pedido encontrado para este nome ainda.
+                  Nenhum pedido encontrado para seu cadastro ainda.
                 </div>
               )}
             </div>

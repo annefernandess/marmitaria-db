@@ -10,10 +10,12 @@ from app.models.enums import EstadoPedido
 from app.models.estoque import Estoque
 from app.models.pedido import Pedido
 from app.models.pedido_item import PedidoItem
+from app.models.usuario import Usuario
 from app.repositories.cliente_repository import ClienteRepository
 from app.repositories.estoque_repository import EstoqueRepository
 from app.repositories.pedido_item_repository import PedidoItemRepository
 from app.repositories.pedido_repository import PedidoRepository
+from app.repositories.usuario_repository import UsuarioRepository
 
 
 def _decimal_to_float(value: Decimal) -> float:
@@ -30,6 +32,27 @@ class ClienteResponse(BaseModel):
     nome: str
     numero: str
     ativo: bool
+
+
+class AuthRegisterRequest(BaseModel):
+    nome: str = Field(min_length=1)
+    email: str = Field(min_length=1)
+    senha: str = Field(min_length=1)
+    numero: str = Field(min_length=1)
+
+
+class AuthLoginRequest(BaseModel):
+    email: str = Field(min_length=1)
+    senha: str = Field(min_length=1)
+
+
+class UsuarioResponse(BaseModel):
+    id: int
+    nome: str
+    email: str
+    numero: str
+    role: str
+    cliente_id: int | None
 
 
 class EstoqueCreate(BaseModel):
@@ -122,6 +145,17 @@ def _cliente_to_response(cliente: Cliente) -> ClienteResponse:
     )
 
 
+def _usuario_to_response(usuario: Usuario) -> UsuarioResponse:
+    return UsuarioResponse(
+        id=usuario.id,
+        nome=usuario.nome,
+        email=usuario.email,
+        numero=usuario.numero,
+        role=usuario.role,
+        cliente_id=usuario.cliente_id,
+    )
+
+
 def _estoque_to_response(item: Estoque) -> EstoqueResponse:
     return EstoqueResponse(
         id=item.id,
@@ -187,6 +221,27 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def healthcheck() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.post("/auth/register", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
+    def cadastrar_usuario(payload: AuthRegisterRequest) -> UsuarioResponse:
+        usuario = UsuarioRepository().cadastrar(
+            Usuario(
+                nome=payload.nome,
+                email=payload.email.lower().strip(),
+                senha=payload.senha,
+                numero=payload.numero,
+                role="user",
+            )
+        )
+        return _usuario_to_response(usuario)
+
+    @app.post("/auth/login", response_model=UsuarioResponse)
+    def login(payload: AuthLoginRequest) -> UsuarioResponse:
+        usuario = UsuarioRepository().autenticar(
+            email=payload.email.lower().strip(),
+            senha=payload.senha,
+        )
+        return _usuario_to_response(usuario)
 
     @app.post("/clientes", response_model=ClienteResponse, status_code=status.HTTP_201_CREATED)
     def criar_cliente(payload: ClienteCreate) -> ClienteResponse:
