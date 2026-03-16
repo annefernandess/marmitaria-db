@@ -245,12 +245,8 @@ classDiagram
         +inserir()
         +alterar()
         +remover()
-        +buscar(id)
         +listar_todos() List
-        +listar_por_cliente(cliente_id) List
         +exibir(id)
-        +atualizar_estado(estado)
-        +marcar_pago()
     }
 
     class PedidoItem {
@@ -259,10 +255,10 @@ classDiagram
         +int item_id
         +int quantidade
         +Decimal valor_unitario
-        +inserir()
+        +listar_todos() List
+        +exibir(id)
         +alterar()
         +remover()
-        +listar_por_pedido(pedido_id) List
     }
 
     class Estoque {
@@ -274,9 +270,9 @@ classDiagram
         +inserir()
         +alterar()
         +remover()
+        +buscar_por_nome(nome) List
         +listar_todos() List
         +exibir(id)
-        +atualizar_quantidade(delta)
     }
 
     class EstadoPedido {
