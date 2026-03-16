@@ -85,7 +85,23 @@ class PedidoItemRepository:
 
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Trava pedidos primeiro (e cliente) para padronizar ordem de locks
+                # Busca o item primeiro para validar sempre contra o pedido real
+                # persistido, mesmo se o caller informar um pedido_id incorreto.
+                cur.execute(
+                    """
+                    SELECT pedido_id, item_id, quantidade, valor_unitario
+                    FROM pedido_itens
+                    WHERE id = %s
+                    """,
+                    (pedido_item.id,),
+                )
+                atual = cur.fetchone()
+
+                if atual is None:
+                    raise ValueError("Item de pedido não encontrado (após lock).")
+
+                pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
+
                 cur.execute(
                     """
                     SELECT p.estado, c.ativo
@@ -94,7 +110,7 @@ class PedidoItemRepository:
                     WHERE p.id = %s
                     FOR UPDATE
                     """,
-                    (pedido_item.pedido_id,),
+                    (pedido_id_atual,),
                 )
                 pedido_info = cur.fetchone()
 
@@ -110,7 +126,7 @@ class PedidoItemRepository:
                 if not cliente_ativo:
                     raise ValueError("Não é permitido alterar itens de cliente inativo.")
 
-                # Em seguida, trava o item de pedido específico
+                # Com o pedido validado, trava a linha do item para calcular o delta.
                 cur.execute(
                     """
                     SELECT pedido_id, item_id, quantidade, valor_unitario
