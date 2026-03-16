@@ -208,6 +208,27 @@ class PedidoRepository:
                     (pedido.estado.value, pedido.pago, pedido.id),
                 )
                 updated = cur.fetchone()
+
+                # Se o pedido foi cancelado, devolve as quantidades ao estoque.
+                if estado_atual != EstadoPedido.CANCELADO and pedido.estado == EstadoPedido.CANCELADO:
+                    cur.execute(
+                        """
+                        SELECT item_id, quantidade
+                        FROM pedido_itens
+                        WHERE pedido_id = %s
+                        """,
+                        (pedido.id,),
+                    )
+                    itens = cur.fetchall()
+                    for item_id, quantidade in itens:
+                        cur.execute(
+                            """
+                            UPDATE estoque
+                            SET quantidade_disponivel = quantidade_disponivel + %s
+                            WHERE id = %s
+                            """,
+                            (quantidade, item_id),
+                        )
             conn.commit()
 
         pedido.estado = EstadoPedido(updated[1])
