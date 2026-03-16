@@ -389,6 +389,9 @@ def test_alterar_para_cancelado_restaura_estoque(db, repo, cliente, item_estoque
         cur.execute("SELECT COUNT(*) FROM pedido_itens WHERE pedido_id = %s", (pedido.id,))
         assert cur.fetchone()[0] == 0  # itens removidos ao cancelar
 
+        cur.execute("SELECT valor FROM pedidos WHERE id = %s", (pedido.id,))
+        assert cur.fetchone()[0] == Decimal("0.00")  # valor do pedido zerado ao cancelar
+
 
 def test_alterar_falha_se_cliente_inativo(db, repo, cliente, item_estoque):
     pedido = repo.inserir(
