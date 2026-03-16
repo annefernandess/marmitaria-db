@@ -98,7 +98,7 @@ class PedidoItemRepository:
                 atual = cur.fetchone()
 
                 if atual is None:
-                    raise ValueError("Item de pedido não encontrado (após lock).")
+                    raise ValueError("Item de pedido não encontrado.")
 
                 pedido_id_atual, item_id_atual, qtd_atual, valor_unitario = atual
 
