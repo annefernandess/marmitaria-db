@@ -200,7 +200,11 @@ export default function PedidoPage() {
           </button>
         </nav>
 
-        <div className="mx-auto max-w-5xl px-6 py-8">
+        <div
+          className={`mx-auto max-w-5xl px-6 py-8 ${
+            cartItems.length > 0 ? "pb-40 md:pb-44" : ""
+          }`}
+        >
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-[#1B2A4A]">
               Cardápio

@@ -43,6 +43,26 @@ CREATE TABLE IF NOT EXISTS estoque (
 ALTER TABLE IF EXISTS estoque
     ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE;
 
+-- Carga inicial de produtos
+INSERT INTO estoque (item, quantidade_disponivel, valor, ativo)
+SELECT seed.item, seed.quantidade_disponivel, seed.valor, seed.ativo
+FROM (
+    VALUES
+        ('Coxinha de Frango', 40, 7.50, TRUE),
+        ('Coxinha de Carne', 30, 8.00, TRUE),
+        ('Empada de Frango', 25, 6.50, TRUE),
+        ('Empada de Palmito', 20, 7.00, TRUE),
+        ('Pastel de Queijo', 35, 6.00, TRUE),
+        ('Pastel de Carne', 35, 6.50, TRUE),
+        ('Kibe', 28, 5.50, TRUE),
+        ('Enroladinho de Salsicha', 32, 5.00, TRUE),
+        ('Suco de Laranja 300ml', 18, 4.50, TRUE),
+        ('Refrigerante Lata', 24, 5.00, TRUE)
+) AS seed(item, quantidade_disponivel, valor, ativo)
+LEFT JOIN estoque existente
+    ON LOWER(existente.item) = LOWER(seed.item)
+WHERE existente.id IS NULL;
+
 -- ------------------------------------------------------------
 --  Usuários (autenticação)
 -- ------------------------------------------------------------
@@ -80,9 +100,39 @@ ALTER TABLE IF EXISTS usuarios
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_email_unique ON usuarios(email);
 
+-- Carga inicial de clientes para demonstração do fluxo do usuário
+INSERT INTO clientes (nome, numero, ativo)
+SELECT seed.nome, seed.numero, seed.ativo
+FROM (
+    VALUES
+        ('Maria Silva', '11999990001', TRUE),
+        ('João Souza', '11999990002', TRUE),
+        ('Ana Costa', '11999990003', TRUE)
+) AS seed(nome, numero, ativo)
+LEFT JOIN clientes existente
+    ON existente.numero = seed.numero
+   AND LOWER(existente.nome) = LOWER(seed.nome)
+WHERE existente.id IS NULL;
+
 INSERT INTO usuarios (nome, email, senha, numero, role, cliente_id, ativo)
 VALUES ('YAO Admin', 'yao@lanches.com', 'admin', '00000000000', 'admin', NULL, TRUE)
 ON CONFLICT (email) DO NOTHING;
+
+-- Carga inicial de usuários comuns vinculados aos clientes de demonstração
+INSERT INTO usuarios (nome, email, senha, numero, role, cliente_id, ativo)
+SELECT seed.nome, seed.email, seed.senha, seed.numero, 'user', cliente.id, TRUE
+FROM (
+    VALUES
+        ('Maria Silva', 'maria@yao.com', '123456', '11999990001'),
+        ('João Souza', 'joao@yao.com', '123456', '11999990002'),
+        ('Ana Costa', 'ana@yao.com', '123456', '11999990003')
+) AS seed(nome, email, senha, numero)
+JOIN clientes cliente
+    ON cliente.numero = seed.numero
+   AND LOWER(cliente.nome) = LOWER(seed.nome)
+LEFT JOIN usuarios existente
+    ON LOWER(existente.email) = LOWER(seed.email)
+WHERE existente.id IS NULL;
 
 -- ------------------------------------------------------------
 --  Pedidos

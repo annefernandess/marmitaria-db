@@ -41,13 +41,88 @@ As dependências Python são instaladas automaticamente via `uv sync` na criaç�
 uv sync
 ```
 
+As dependências do frontend também são instaladas automaticamente no `postCreateCommand`, mas você pode reinstalar manualmente quando precisar:
+
+```bash
+cd frontend
+npm install
+```
+
 Para adicionar novos pacotes:
 
 ```bash
 uv add nome-do-pacote
 ```
 
-### 4. Rodar os testes
+### 4. Rodar o projeto
+
+Com o Dev Container aberto, o banco PostgreSQL sobe pelo `docker-compose` da pasta `.devcontainer` e a variável `DATABASE_URL` já fica configurada no container.
+
+Abra dois terminais.
+
+#### Backend API (FastAPI)
+
+Na raiz do projeto:
+
+```bash
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+A API ficará disponível em:
+
+- `http://127.0.0.1:8000`
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/docs`
+
+#### Frontend (Next.js)
+
+Em outro terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+O frontend ficará disponível em:
+
+- `http://127.0.0.1:3000`
+- `http://127.0.0.1:3000/login`
+- `http://127.0.0.1:3000/cadastro`
+
+#### Ordem recomendada
+
+1. Abra o Dev Container
+2. Confirme as dependências com `uv sync` e `cd frontend && npm install`
+3. Suba o backend
+4. Suba o frontend
+5. Acesse `http://127.0.0.1:3000`
+
+#### Verificação rápida
+
+Se quiser validar que tudo subiu corretamente:
+
+```bash
+# backend
+python - <<'PY'
+import urllib.request
+print(urllib.request.urlopen("http://127.0.0.1:8000/health").read().decode())
+PY
+
+# frontend
+python - <<'PY'
+import urllib.request
+print(urllib.request.urlopen("http://127.0.0.1:3000/login").status)
+PY
+```
+
+#### Usuário admin padrão
+
+O schema inicial cria automaticamente um usuário administrador:
+
+- E-mail: `yao@lanches.com`
+- Senha: `admin`
+
+### 5. Rodar os testes
 
 ```bash
 # Todos os testes
