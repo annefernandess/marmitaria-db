@@ -14,6 +14,7 @@ import type {
   RelatorioClientes,
   RelatorioEstoque,
   RelatorioVendas,
+  VendaVendedor,
 } from "@/lib/types";
 
 function ReportCard({
@@ -62,6 +63,7 @@ export default function RelatoriosPage() {
   const [vendas, setVendas] = useState<RelatorioVendas | null>(null);
   const [estoque, setEstoque] = useState<RelatorioEstoque | null>(null);
   const [clientes, setClientes] = useState<RelatorioClientes | null>(null);
+  const [vendasVendedor, setVendasVendedor] = useState<VendaVendedor[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -69,15 +71,20 @@ export default function RelatoriosPage() {
         setLoading(true);
         setError(null);
 
-        const [vendasData, estoqueData, clientesData] = await Promise.all([
-          apiFetch<RelatorioVendas>("/relatorios/vendas"),
-          apiFetch<RelatorioEstoque>("/relatorios/estoque"),
-          apiFetch<RelatorioClientes>("/relatorios/clientes"),
-        ]);
+        const [vendasData, estoqueData, clientesData, vendasVendedorData] =
+          await Promise.all([
+            apiFetch<RelatorioVendas>("/relatorios/vendas"),
+            apiFetch<RelatorioEstoque>("/relatorios/estoque"),
+            apiFetch<RelatorioClientes>("/relatorios/clientes"),
+            apiFetch<VendaVendedor[]>("/relatorios/vendas-vendedor").catch(
+              () => [] as VendaVendedor[]
+            ),
+          ]);
 
         setVendas(vendasData);
         setEstoque(estoqueData);
         setClientes(clientesData);
+        setVendasVendedor(vendasVendedorData);
       } catch (err) {
         setError(getErrorMessage(err));
       } finally {
@@ -137,6 +144,70 @@ export default function RelatoriosPage() {
           ]}
         />
       </div>
+
+      {vendasVendedor.length > 0 && (
+        <div className="mt-8 rounded-2xl border border-[#F5C451]/20 bg-white/80 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1B2A4A]">
+            Vendas por Vendedor (Mensal)
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#F5C451]/10">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
+                    Vendedor
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
+                    Mês
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
+                    Pedidos
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
+                    Valor Total
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
+                    Descontos
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
+                    Pgtos Confirmados
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F5C451]/10">
+                {vendasVendedor.map((v, i) => (
+                  <tr
+                    key={`${v.vendedor_id}-${v.mes}-${i}`}
+                    className="hover:bg-[#FFF5E6]/30"
+                  >
+                    <td className="px-4 py-3 text-sm font-medium text-[#1B2A4A]">
+                      {v.vendedor_nome}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-[#1B2A4A]/60">
+                      {new Date(v.mes).toLocaleDateString("pt-BR", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-[#1B2A4A]">
+                      {v.total_pedidos}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-[#1B2A4A]">
+                      {formatCurrency(v.valor_total)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-[#E85B5B]">
+                      {formatCurrency(v.desconto_total)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-green-600">
+                      {v.pagamentos_confirmados}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 rounded-2xl border border-[#F5C451]/20 bg-white/80 p-8 text-center">
         {error ? (
