@@ -5,8 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 
+from app.database import get_connection
 from app.models.cliente import Cliente
-from app.models.enums import EstadoPedido
+from app.models.enums import EstadoPedido, FormaPagamento, StatusPagamento
 from app.models.estoque import Estoque
 from app.models.pedido import Pedido
 from app.models.pedido_item import PedidoItem
@@ -22,15 +23,24 @@ def _decimal_to_float(value: Decimal) -> float:
     return float(value)
 
 
+# --- DTOs ---
+
+
 class ClienteCreate(BaseModel):
     nome: str = Field(min_length=1)
     numero: str = Field(min_length=1)
+    torce_flamengo: bool = False
+    assiste_one_piece: bool = False
+    eh_de_sousa: bool = False
 
 
 class ClienteResponse(BaseModel):
     id: int
     nome: str
     numero: str
+    torce_flamengo: bool
+    assiste_one_piece: bool
+    eh_de_sousa: bool
     ativo: bool
 
 
@@ -59,6 +69,8 @@ class EstoqueCreate(BaseModel):
     item: str = Field(min_length=1)
     quantidade_disponivel: int = Field(ge=0)
     valor: Decimal = Field(gt=0)
+    categoria: str = "Geral"
+    fabricado_em_mari: bool = False
 
 
 class EstoqueResponse(BaseModel):
@@ -66,6 +78,8 @@ class EstoqueResponse(BaseModel):
     item: str
     quantidade_disponivel: int
     valor: float
+    categoria: str
+    fabricado_em_mari: bool
     ativo: bool
 
 
@@ -88,6 +102,8 @@ class PedidoItemResponse(BaseModel):
 
 class PedidoCreate(BaseModel):
     cliente_id: int
+    vendedor_id: int | None = None
+    forma_pagamento: FormaPagamento | None = None
     estado: EstadoPedido = EstadoPedido.EM_ANDAMENTO
     pago: bool = False
     itens: list[PedidoItemCreate]
@@ -96,10 +112,11 @@ class PedidoCreate(BaseModel):
 class PedidoUpdate(BaseModel):
     estado: EstadoPedido | None = None
     pago: bool | None = None
+    status_pagamento: StatusPagamento | None = None
 
     @model_validator(mode="after")
     def validar_payload(self) -> "PedidoUpdate":
-        if self.estado is None and self.pago is None:
+        if self.estado is None and self.pago is None and self.status_pagamento is None:
             raise ValueError("Informe pelo menos um campo para alterar o pedido.")
         return self
 
@@ -112,6 +129,11 @@ class PedidoResponse(BaseModel):
     estado: EstadoPedido
     valor: float
     pago: bool
+    vendedor_id: int | None
+    vendedor_nome: str | None
+    forma_pagamento: FormaPagamento | None
+    status_pagamento: StatusPagamento
+    desconto: float
     itens: list[PedidoItemResponse]
 
 
@@ -136,11 +158,27 @@ class RelatorioClientesResponse(BaseModel):
     clientes_sem_pedidos: int
 
 
+class VendaVendedorResponse(BaseModel):
+    vendedor_id: int
+    vendedor_nome: str
+    mes: str
+    total_pedidos: int
+    valor_total: float
+    desconto_total: float
+    pagamentos_confirmados: int
+
+
+# --- Helpers ---
+
+
 def _cliente_to_response(cliente: Cliente) -> ClienteResponse:
     return ClienteResponse(
         id=cliente.id,
         nome=cliente.nome,
         numero=cliente.numero,
+        torce_flamengo=cliente.torce_flamengo,
+        assiste_one_piece=cliente.assiste_one_piece,
+        eh_de_sousa=cliente.eh_de_sousa,
         ativo=cliente.ativo,
     )
 
@@ -162,6 +200,8 @@ def _estoque_to_response(item: Estoque) -> EstoqueResponse:
         item=item.item,
         quantidade_disponivel=item.quantidade_disponivel,
         valor=_decimal_to_float(item.valor),
+        categoria=item.categoria,
+        fabricado_em_mari=item.fabricado_em_mari,
         ativo=item.ativo,
     )
 
@@ -175,6 +215,16 @@ def _pedido_item_to_response(item: PedidoItem) -> PedidoItemResponse:
         quantidade=item.quantidade,
         valor_unitario=_decimal_to_float(valor_unitario),
     )
+
+
+def _get_vendedor_nome(vendedor_id: int | None) -> str | None:
+    if vendedor_id is None:
+        return None
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT nome FROM usuarios WHERE id = %s", (vendedor_id,))
+            row = cur.fetchone()
+    return row[0] if row else None
 
 
 def _build_pedido_response(pedido: Pedido) -> PedidoResponse:
@@ -193,12 +243,20 @@ def _build_pedido_response(pedido: Pedido) -> PedidoResponse:
         estado=pedido.estado,
         valor=_decimal_to_float(pedido.valor),
         pago=pedido.pago,
+        vendedor_id=pedido.vendedor_id,
+        vendedor_nome=_get_vendedor_nome(pedido.vendedor_id),
+        forma_pagamento=pedido.forma_pagamento,
+        status_pagamento=pedido.status_pagamento,
+        desconto=_decimal_to_float(pedido.desconto),
         itens=[_pedido_item_to_response(item) for item in itens],
     )
 
 
+# --- App ---
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="Marmitaria Yao API", version="0.1.0")
+    app = FastAPI(title="Marmitaria Yao API", version="0.2.0")
 
     app.add_middleware(
         CORSMiddleware,
@@ -222,6 +280,8 @@ def create_app() -> FastAPI:
     def healthcheck() -> dict[str, str]:
         return {"status": "ok"}
 
+    # --- Auth ---
+
     @app.post("/auth/register", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
     def cadastrar_usuario(payload: AuthRegisterRequest) -> UsuarioResponse:
         usuario = UsuarioRepository().cadastrar(
@@ -243,10 +303,18 @@ def create_app() -> FastAPI:
         )
         return _usuario_to_response(usuario)
 
+    # --- Clientes ---
+
     @app.post("/clientes", response_model=ClienteResponse, status_code=status.HTTP_201_CREATED)
     def criar_cliente(payload: ClienteCreate) -> ClienteResponse:
         cliente = ClienteRepository().inserir(
-            Cliente(nome=payload.nome, numero=payload.numero)
+            Cliente(
+                nome=payload.nome,
+                numero=payload.numero,
+                torce_flamengo=payload.torce_flamengo,
+                assiste_one_piece=payload.assiste_one_piece,
+                eh_de_sousa=payload.eh_de_sousa,
+            )
         )
         return _cliente_to_response(cliente)
 
@@ -266,13 +334,22 @@ def create_app() -> FastAPI:
     @app.put("/clientes/{cliente_id}", response_model=ClienteResponse)
     def alterar_cliente(cliente_id: int, payload: ClienteCreate) -> ClienteResponse:
         cliente = ClienteRepository().alterar(
-            Cliente(id=cliente_id, nome=payload.nome, numero=payload.numero)
+            Cliente(
+                id=cliente_id,
+                nome=payload.nome,
+                numero=payload.numero,
+                torce_flamengo=payload.torce_flamengo,
+                assiste_one_piece=payload.assiste_one_piece,
+                eh_de_sousa=payload.eh_de_sousa,
+            )
         )
         return _cliente_to_response(cliente)
 
     @app.delete("/clientes/{cliente_id}", status_code=status.HTTP_204_NO_CONTENT)
     def remover_cliente(cliente_id: int) -> None:
         ClienteRepository().remover(cliente_id)
+
+    # --- Estoque ---
 
     @app.post("/estoque", response_model=EstoqueResponse, status_code=status.HTTP_201_CREATED)
     def criar_item_estoque(payload: EstoqueCreate) -> EstoqueResponse:
@@ -281,14 +358,31 @@ def create_app() -> FastAPI:
                 item=payload.item,
                 quantidade_disponivel=payload.quantidade_disponivel,
                 valor=payload.valor,
+                categoria=payload.categoria,
+                fabricado_em_mari=payload.fabricado_em_mari,
             )
         )
         return _estoque_to_response(item)
 
     @app.get("/estoque", response_model=list[EstoqueResponse])
-    def listar_estoque(nome: str | None = None) -> list[EstoqueResponse]:
+    def listar_estoque(
+        nome: str | None = None,
+        categoria: str | None = None,
+        valor_min: Decimal | None = None,
+        valor_max: Decimal | None = None,
+        fabricado_em_mari: bool | None = None,
+        estoque_baixo: bool = False,
+    ) -> list[EstoqueResponse]:
         repo = EstoqueRepository()
-        itens = repo.buscar_por_nome(nome) if nome else repo.listar_todos()
+        has_filters = any(v is not None for v in [nome, categoria, valor_min, valor_max, fabricado_em_mari]) or estoque_baixo
+        if has_filters:
+            itens = repo.buscar_por_filtros(
+                nome=nome, categoria=categoria,
+                valor_min=valor_min, valor_max=valor_max,
+                fabricado_em_mari=fabricado_em_mari, estoque_baixo=estoque_baixo,
+            )
+        else:
+            itens = repo.listar_todos()
         return [_estoque_to_response(item) for item in itens]
 
     @app.get("/estoque/{item_id}", response_model=EstoqueResponse)
@@ -306,6 +400,8 @@ def create_app() -> FastAPI:
                 item=payload.item,
                 quantidade_disponivel=payload.quantidade_disponivel,
                 valor=payload.valor,
+                categoria=payload.categoria,
+                fabricado_em_mari=payload.fabricado_em_mari,
             )
         )
         return _estoque_to_response(item)
@@ -314,6 +410,8 @@ def create_app() -> FastAPI:
     def remover_item_estoque(item_id: int) -> None:
         EstoqueRepository().remover(item_id)
 
+    # --- Pedidos ---
+
     @app.post("/pedidos", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
     def criar_pedido(payload: PedidoCreate) -> PedidoResponse:
         pedido = PedidoRepository().inserir(
@@ -321,6 +419,8 @@ def create_app() -> FastAPI:
                 cliente_id=payload.cliente_id,
                 estado=payload.estado,
                 pago=payload.pago,
+                vendedor_id=payload.vendedor_id,
+                forma_pagamento=payload.forma_pagamento,
             ),
             [
                 PedidoItem(pedido_id=0, item_id=item.item_id, quantidade=item.quantidade)
@@ -370,6 +470,10 @@ def create_app() -> FastAPI:
             estado=payload.estado if payload.estado is not None else atual.estado,
             valor=atual.valor,
             pago=payload.pago if payload.pago is not None else atual.pago,
+            vendedor_id=atual.vendedor_id,
+            forma_pagamento=atual.forma_pagamento,
+            status_pagamento=payload.status_pagamento if payload.status_pagamento is not None else atual.status_pagamento,
+            desconto=atual.desconto,
         )
         atualizado = PedidoRepository().alterar(pedido)
         return _build_pedido_response(atualizado)
@@ -377,6 +481,8 @@ def create_app() -> FastAPI:
     @app.delete("/pedidos/{pedido_id}", status_code=status.HTTP_204_NO_CONTENT)
     def remover_pedido(pedido_id: int) -> None:
         PedidoRepository().remover(pedido_id)
+
+    # --- Pedido Itens ---
 
     @app.get("/pedido-itens", response_model=list[PedidoItemResponse])
     def listar_itens_pedido(pedido_id: int | None = None) -> list[PedidoItemResponse]:
@@ -414,6 +520,8 @@ def create_app() -> FastAPI:
     @app.delete("/pedido-itens/{pedido_item_id}", status_code=status.HTTP_204_NO_CONTENT)
     def remover_item_pedido(pedido_item_id: int) -> None:
         PedidoItemRepository().remover(pedido_item_id)
+
+    # --- Relatórios ---
 
     @app.get("/relatorios/vendas", response_model=RelatorioVendasResponse)
     def relatorio_vendas() -> RelatorioVendasResponse:
@@ -467,6 +575,32 @@ def create_app() -> FastAPI:
             clientes_com_pedidos_ativos=len(clientes_com_pedidos_ativos_ids),
             clientes_sem_pedidos=len(clientes_sem_pedidos),
         )
+
+    @app.get("/relatorios/vendas-vendedor", response_model=list[VendaVendedorResponse])
+    def relatorio_vendas_vendedor() -> list[VendaVendedorResponse]:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT vendedor_id, vendedor_nome, mes, total_pedidos,
+                           valor_total, desconto_total, pagamentos_confirmados
+                    FROM vw_vendas_por_vendedor
+                    """
+                )
+                rows = cur.fetchall()
+
+        return [
+            VendaVendedorResponse(
+                vendedor_id=r[0],
+                vendedor_nome=r[1],
+                mes=r[2].isoformat(),
+                total_pedidos=r[3],
+                valor_total=float(r[4]),
+                desconto_total=float(r[5]),
+                pagamentos_confirmados=r[6],
+            )
+            for r in rows
+        ]
 
     return app
 
