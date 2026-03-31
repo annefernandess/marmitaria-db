@@ -19,7 +19,50 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { formatCurrency, getErrorMessage } from "@/lib/format";
-import type { EstoqueItem, Pedido } from "@/lib/types";
+import type {
+  Cliente,
+  EstoqueItem,
+  FormaPagamento,
+  Pedido,
+  StatusPagamento,
+} from "@/lib/types";
+
+function labelFormaPagamento(forma: FormaPagamento): string {
+  switch (forma) {
+    case "PIX":
+      return "Pix";
+    case "CARTAO":
+      return "Cartão";
+    case "BOLETO":
+      return "Boleto";
+    case "BERRIES":
+      return "Berries";
+    default:
+      return forma;
+  }
+}
+
+function labelStatusPagamento(status: StatusPagamento): string {
+  switch (status) {
+    case "CONFIRMADO":
+      return "Pago";
+    case "REJEITADO":
+      return "Rejeitado";
+    default:
+      return "Pendente";
+  }
+}
+
+function classStatusPagamento(status: StatusPagamento): string {
+  switch (status) {
+    case "CONFIRMADO":
+      return "bg-green-50 text-green-600";
+    case "REJEITADO":
+      return "bg-red-50 text-red-600";
+    default:
+      return "bg-amber-50 text-amber-600";
+  }
+}
 
 interface CartItem {
   menuItem: EstoqueItem;
@@ -36,7 +79,15 @@ export default function PedidoPage() {
   const [consultandoPedidos, setConsultandoPedidos] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meusPedidos, setMeusPedidos] = useState<Pedido[]>([]);
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento | "">("");
+  const [meuCliente, setMeuCliente] = useState<Cliente | null>(null);
   const nomeCliente = user?.nome.trim() ?? "";
+
+  const clienteTemFlagsDesconto =
+    !!meuCliente &&
+    (meuCliente.torce_flamengo ||
+      meuCliente.assiste_one_piece ||
+      meuCliente.eh_de_sousa);
 
   useEffect(() => {
     async function loadCardapio() {
@@ -54,6 +105,22 @@ export default function PedidoPage() {
 
     void loadCardapio();
   }, []);
+
+  useEffect(() => {
+    async function loadMeuCliente() {
+      if (!user?.clienteId) {
+        setMeuCliente(null);
+        return;
+      }
+      try {
+        const data = await apiFetch<Cliente>(`/clientes/${user.clienteId}`);
+        setMeuCliente(data);
+      } catch {
+        setMeuCliente(null);
+      }
+    }
+    void loadMeuCliente();
+  }, [user?.clienteId]);
 
   useEffect(() => {
     async function loadMeusPedidos() {
@@ -140,6 +207,7 @@ export default function PedidoPage() {
         method: "POST",
         body: JSON.stringify({
           cliente_id: user.clienteId,
+          forma_pagamento: formaPagamento || null,
           itens: cartItems.map((item) => ({
             item_id: item.menuItem.id,
             quantidade: item.quantidade,
@@ -148,6 +216,7 @@ export default function PedidoPage() {
       });
 
       setPedidoEnviado(true);
+      setFormaPagamento("");
       setCart(new Map());
       const [refreshedCardapio, pedidosCliente] = await Promise.all([
         apiFetch<EstoqueItem[]>("/estoque"),
@@ -263,20 +332,41 @@ export default function PedidoPage() {
                           <p className="text-xs text-[#1B2A4A]/45">
                             {pedido.itens.length} item(ns) • {formatCurrency(pedido.valor)}
                           </p>
+                          {pedido.desconto > 0 && (
+                            <span className="mt-0.5 block text-xs text-green-600">
+                              Desconto: R$ {pedido.desconto.toFixed(2)}
+                            </span>
+                          )}
                         </div>
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                            pedido.estado === "PRONTO"
-                              ? "bg-green-50 text-green-700"
-                              : pedido.estado === "ENTREGUE"
-                                ? "bg-blue-50 text-blue-700"
-                                : pedido.estado === "CANCELADO"
-                                  ? "bg-red-50 text-red-700"
-                                  : "bg-amber-50 text-amber-700"
-                          }`}
-                        >
-                          {pedido.estado.replace("_", " ")}
-                        </span>
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                              pedido.estado === "PRONTO"
+                                ? "bg-green-50 text-green-700"
+                                : pedido.estado === "ENTREGUE"
+                                  ? "bg-blue-50 text-blue-700"
+                                  : pedido.estado === "CANCELADO"
+                                    ? "bg-red-50 text-red-700"
+                                    : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {pedido.estado.replace("_", " ")}
+                          </span>
+                          {pedido.status_pagamento && (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${classStatusPagamento(
+                                pedido.status_pagamento
+                              )}`}
+                            >
+                              {labelStatusPagamento(pedido.status_pagamento)}
+                            </span>
+                          )}
+                          {pedido.forma_pagamento && (
+                            <span className="rounded-full bg-[#3BB5E8]/10 px-2 py-0.5 text-xs font-medium text-[#3BB5E8]">
+                              {labelFormaPagamento(pedido.forma_pagamento)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -392,7 +482,7 @@ export default function PedidoPage() {
 
           {cartItems.length > 0 && (
             <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#F5C451]/20 bg-white/90 backdrop-blur-xl px-6 py-4 shadow-lg">
-              <div className="mx-auto flex max-w-5xl items-center justify-between">
+              <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFF5E6]">
                     <ShoppingCart className="h-5 w-5 text-[#F5A623]" />
@@ -407,20 +497,41 @@ export default function PedidoPage() {
                     <p className="text-lg font-bold text-[#F5A623]">
                       {formatCurrency(total)}
                     </p>
+                    {clienteTemFlagsDesconto && (
+                      <p className="mt-1 text-xs text-[#1B2A4A]/55">
+                        Seu perfil participa das promoções com desconto; o valor final pode
+                        incluir desconto ao processar o pedido.
+                      </p>
+                    )}
                   </div>
                 </div>
-                <button
-                  onClick={() => void handleEnviarPedido()}
-                  disabled={submitting}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#F5A623] px-6 py-3 text-sm font-bold text-[#1B2A4A] shadow-md shadow-[#F5A623]/20 transition-all hover:bg-[#F5C451] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                  {submitting ? "Enviando..." : "Enviar Pedido"}
-                </button>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <select
+                    value={formaPagamento}
+                    onChange={(e) =>
+                      setFormaPagamento(e.target.value as FormaPagamento | "")
+                    }
+                    className="rounded-xl border border-[#F5C451]/20 bg-white px-3 py-2 text-sm text-[#1B2A4A] outline-none"
+                  >
+                    <option value="">Forma de pagamento</option>
+                    <option value="PIX">Pix</option>
+                    <option value="CARTAO">Cartão</option>
+                    <option value="BOLETO">Boleto</option>
+                    <option value="BERRIES">Berries</option>
+                  </select>
+                  <button
+                    onClick={() => void handleEnviarPedido()}
+                    disabled={submitting}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#F5A623] px-6 py-3 text-sm font-bold text-[#1B2A4A] shadow-md shadow-[#F5A623]/20 transition-all hover:bg-[#F5C451] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    {submitting ? "Enviando..." : "Enviar Pedido"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
