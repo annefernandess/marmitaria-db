@@ -145,7 +145,7 @@ export default function Home() {
             />
             <span className="font-bold text-[#1B2A4A]/80">YAO Lanches</span>
           </div>
-          <p className="text-sm text-[#1B2A4A]/30">
+          <p className="text-sm text-[#1B2A4A]/30" suppressHydrationWarning>
             Projeto acadêmico — Banco de Dados © {new Date().getFullYear()}
           </p>
         </footer>

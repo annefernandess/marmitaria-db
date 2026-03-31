@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface CascadeItem {
   id: number;
@@ -70,7 +70,14 @@ function FlamengoIcon({ size, opacity }: { size: number; opacity: number }) {
 }
 
 export default function CoxinhaCascade({ count = 45 }: { count?: number }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const { coxinhas, flamengos } = useMemo(() => {
+    if (!mounted) return { coxinhas: [], flamengos: [] };
     const flamengoCount = Math.floor(count / 2);
     const coxinhaCount = count - flamengoCount;
 
@@ -78,9 +85,9 @@ export default function CoxinhaCascade({ count = 45 }: { count?: number }) {
       coxinhas: generateCascadeItems(coxinhaCount, 0),
       flamengos: generateCascadeItems(flamengoCount, 0.5),
     };
-  }, [count]);
+  }, [count, mounted]);
 
-  if (coxinhas.length === 0 && flamengos.length === 0) return null;
+  if (!mounted || (coxinhas.length === 0 && flamengos.length === 0)) return null;
 
   return (
     <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
