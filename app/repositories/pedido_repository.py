@@ -1,20 +1,13 @@
 from decimal import Decimal
 
 from app.database import get_connection
-from app.models.enums import EstadoPedido
+from app.models.enums import EstadoPedido, FormaPagamento, StatusPagamento
 from app.models.pedido import Pedido
 from app.models.pedido_item import PedidoItem
 
 
 class PedidoRepository:
     def inserir(self, pedido: Pedido, itens: list[PedidoItem]) -> Pedido:
-        """
-        Insere um pedido e seus itens dentro de uma única transação.
-
-        Valida o estoque disponível para cada item antes de qualquer alteração.
-        Calcula o valor total do pedido a partir dos preços atuais do estoque.
-        Decrementa o estoque de cada item ao confirmar o pedido.
-        """
         if not itens:
             raise ValueError("O pedido deve ter pelo menos um item.")
 
@@ -25,10 +18,17 @@ class PedidoRepository:
                 self._validar_cliente(cur, pedido.cliente_id)
                 valor_por_item = self._validar_e_calcular(cur, pedido, itens)
 
+                cur.execute("SELECT calcular_desconto(%s)", (pedido.cliente_id,))
+                percentual = cur.fetchone()[0] or Decimal("0")
+                pedido.desconto = (pedido.valor * percentual / Decimal("100")).quantize(Decimal("0.01"))
+                pedido.valor = pedido.valor - pedido.desconto
+
                 cur.execute(
                     """
-                    INSERT INTO pedidos (cliente_id, data, estado, valor, pago)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO pedidos
+                        (cliente_id, data, estado, valor, pago,
+                         vendedor_id, forma_pagamento, status_pagamento, desconto)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
@@ -37,6 +37,10 @@ class PedidoRepository:
                         pedido.estado.value,
                         pedido.valor,
                         pedido.pago,
+                        pedido.vendedor_id,
+                        pedido.forma_pagamento.value if pedido.forma_pagamento else None,
+                        pedido.status_pagamento.value,
+                        pedido.desconto,
                     ),
                 )
                 pedido.id = cur.fetchone()[0]
@@ -71,24 +75,15 @@ class PedidoRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, cliente_id, data, estado, valor, pago
+                    SELECT id, cliente_id, data, estado, valor, pago,
+                           vendedor_id, forma_pagamento, status_pagamento, desconto
                     FROM pedidos
                     ORDER BY id
                     """
                 )
                 rows = cur.fetchall()
 
-        return [
-            Pedido(
-                id=row[0],
-                cliente_id=row[1],
-                data=row[2],
-                estado=EstadoPedido(row[3]),
-                valor=row[4],
-                pago=row[5],
-            )
-            for row in rows
-        ]
+        return [self._row_to_pedido(row) for row in rows]
 
     def remover(self, pedido_id: int) -> None:
         """Remove um pedido e restaura o estoque a partir dos itens removidos."""
@@ -125,7 +120,8 @@ class PedidoRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, cliente_id, data, estado, valor, pago
+                    SELECT id, cliente_id, data, estado, valor, pago,
+                           vendedor_id, forma_pagamento, status_pagamento, desconto
                     FROM pedidos
                     WHERE id = %s
                     """,
@@ -136,14 +132,7 @@ class PedidoRepository:
         if row is None:
             return None
 
-        return Pedido(
-            id=row[0],
-            cliente_id=row[1],
-            data=row[2],
-            estado=EstadoPedido(row[3]),
-            valor=row[4],
-            pago=row[5],
-        )
+        return self._row_to_pedido(row)
 
     def alterar(self, pedido: Pedido) -> Pedido:
         if pedido.id is None:
@@ -198,21 +187,37 @@ class PedidoRepository:
                 if pedido.estado == EstadoPedido.CANCELADO and pedido.pago:
                     raise ValueError("Pedido cancelado não pode ser marcado como pago.")
 
+                if pedido.status_pagamento == StatusPagamento.CONFIRMADO:
+                    pedido.pago = True
+
                 cur.execute(
                     """
                     UPDATE pedidos
-                    SET estado = %s, pago = %s
+                    SET estado = %s, pago = %s, status_pagamento = %s
                     WHERE id = %s
-                    RETURNING id, estado, pago
+                    RETURNING id, cliente_id, data, estado, valor, pago,
+                              vendedor_id, forma_pagamento, status_pagamento, desconto
                     """,
-                    (pedido.estado.value, pedido.pago, pedido.id),
+                    (pedido.estado.value, pedido.pago, pedido.status_pagamento.value, pedido.id),
                 )
                 updated = cur.fetchone()
             conn.commit()
 
-        pedido.estado = EstadoPedido(updated[1])
-        pedido.pago = updated[2]
-        return pedido
+        return self._row_to_pedido(updated)
+
+    def _row_to_pedido(self, row) -> Pedido:
+        return Pedido(
+            id=row[0],
+            cliente_id=row[1],
+            data=row[2],
+            estado=EstadoPedido(row[3]),
+            valor=row[4],
+            pago=row[5],
+            vendedor_id=row[6],
+            forma_pagamento=FormaPagamento(row[7]) if row[7] else None,
+            status_pagamento=StatusPagamento(row[8]) if row[8] else StatusPagamento.PENDENTE,
+            desconto=row[9] or Decimal("0"),
+        )
 
     def _mesclar_itens(self, itens: list[PedidoItem]) -> list[PedidoItem]:
         """

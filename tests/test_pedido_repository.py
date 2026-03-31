@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 
 from app.models.cliente import Cliente
-from app.models.enums import EstadoPedido
+from app.models.enums import EstadoPedido, FormaPagamento, StatusPagamento
 from app.models.estoque import Estoque
 from app.models.pedido import Pedido
 from app.models.pedido_item import PedidoItem
@@ -387,3 +387,59 @@ def db_dois_itens(db):
     item_a = repo.inserir(Estoque(item="Frango", quantidade_disponivel=10, valor=Decimal("10.00")))
     item_b = repo.inserir(Estoque(item="Carne", quantidade_disponivel=10, valor=Decimal("20.00")))
     return item_a, item_b
+
+
+def test_inserir_pedido_com_vendedor_e_pagamento(db, repo, cliente, item_estoque, vendedor):
+    pedido = repo.inserir(
+        Pedido(
+            cliente_id=cliente.id,
+            vendedor_id=vendedor.id,
+            forma_pagamento=FormaPagamento.PIX,
+        ),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+    assert pedido.vendedor_id == vendedor.id
+    assert pedido.forma_pagamento == FormaPagamento.PIX
+    assert pedido.status_pagamento == StatusPagamento.PENDENTE
+
+    recuperado = repo.exibir_um(pedido.id)
+    assert recuperado.vendedor_id == vendedor.id
+    assert recuperado.forma_pagamento == FormaPagamento.PIX
+
+
+def test_inserir_pedido_aplica_desconto_flamengo(db, repo, item_estoque, vendedor):
+    cliente = ClienteRepository().inserir(
+        Cliente(nome="Mengao", numero="777", torce_flamengo=True)
+    )
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id, vendedor_id=vendedor.id, forma_pagamento=FormaPagamento.PIX),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=2)],
+    )
+    valor_bruto = item_estoque.valor * 2
+    assert pedido.desconto == (valor_bruto * Decimal("0.05")).quantize(Decimal("0.01"))
+    assert pedido.valor == valor_bruto - pedido.desconto
+
+
+def test_inserir_pedido_desconto_acumula(db, repo, item_estoque, vendedor):
+    cliente = ClienteRepository().inserir(
+        Cliente(nome="Full Desconto", numero="666", torce_flamengo=True, assiste_one_piece=True, eh_de_sousa=True)
+    )
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id, vendedor_id=vendedor.id, forma_pagamento=FormaPagamento.CARTAO),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+    valor_bruto = item_estoque.valor
+    assert pedido.desconto == (valor_bruto * Decimal("0.15")).quantize(Decimal("0.01"))
+
+
+def test_alterar_status_pagamento_confirmado_seta_pago(db, repo, cliente, item_estoque, vendedor):
+    pedido = repo.inserir(
+        Pedido(cliente_id=cliente.id, vendedor_id=vendedor.id, forma_pagamento=FormaPagamento.BOLETO),
+        [PedidoItem(pedido_id=0, item_id=item_estoque.id, quantidade=1)],
+    )
+    assert pedido.pago is False
+
+    pedido.status_pagamento = StatusPagamento.CONFIRMADO
+    atualizado = repo.alterar(pedido)
+    assert atualizado.pago is True
+    assert atualizado.status_pagamento == StatusPagamento.CONFIRMADO
