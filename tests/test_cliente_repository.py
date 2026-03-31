@@ -166,3 +166,27 @@ def test_exibir_um_inativo_ou_inexistente_retorna_none(db, repo):
 
     assert repo.exibir_um(cliente.id) is None
     assert repo.exibir_um(999999) is None
+
+
+def test_inserir_cliente_com_perfil_desconto(db):
+    repo = ClienteRepository()
+    cliente = repo.inserir(
+        Cliente(nome="Luffy Fan", numero="999", torce_flamengo=True, assiste_one_piece=True, eh_de_sousa=False)
+    )
+    assert cliente.id is not None
+    recuperado = repo.exibir_um(cliente.id)
+    assert recuperado.torce_flamengo is True
+    assert recuperado.assiste_one_piece is True
+    assert recuperado.eh_de_sousa is False
+
+
+def test_alterar_cliente_perfil_desconto(db):
+    repo = ClienteRepository()
+    cliente = repo.inserir(Cliente(nome="Teste Perfil", numero="888"))
+    assert cliente.torce_flamengo is False
+
+    cliente.torce_flamengo = True
+    cliente.eh_de_sousa = True
+    atualizado = repo.alterar(cliente)
+    assert atualizado.torce_flamengo is True
+    assert atualizado.eh_de_sousa is True
