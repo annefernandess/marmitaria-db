@@ -215,3 +215,106 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_cliente_id   ON pedidos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_pedidos_estado       ON pedidos(estado);
 CREATE INDEX IF NOT EXISTS idx_pedido_itens_pedido  ON pedido_itens(pedido_id);
 CREATE INDEX IF NOT EXISTS idx_pedido_itens_item    ON pedido_itens(item_id);
+
+-- ============================================================
+--  Part 2 — Schema evolution
+-- ============================================================
+
+-- Novos ENUMs
+DO $$ BEGIN
+    CREATE TYPE forma_pagamento AS ENUM ('CARTAO', 'BOLETO', 'PIX', 'BERRIES');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE status_pagamento AS ENUM ('PENDENTE', 'CONFIRMADO', 'REJEITADO');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ------------------------------------------------------------
+--  Novas colunas em clientes (perfil de desconto)
+-- ------------------------------------------------------------
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS torce_flamengo BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS assiste_one_piece BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS eh_de_sousa BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ------------------------------------------------------------
+--  Novas colunas em estoque (categoria + origem)
+-- ------------------------------------------------------------
+ALTER TABLE estoque ADD COLUMN IF NOT EXISTS categoria VARCHAR(100) NOT NULL DEFAULT 'Geral';
+ALTER TABLE estoque ADD COLUMN IF NOT EXISTS fabricado_em_mari BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ------------------------------------------------------------
+--  Novas colunas em pedidos (vendedor, pagamento, desconto)
+-- ------------------------------------------------------------
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS vendedor_id INT NULL REFERENCES usuarios(id);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS forma_pagamento forma_pagamento NULL;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS status_pagamento status_pagamento NOT NULL DEFAULT 'PENDENTE';
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS desconto NUMERIC(10, 2) NOT NULL DEFAULT 0;
+
+DO $$ BEGIN
+    ALTER TABLE pedidos ADD CONSTRAINT pedidos_desconto_check CHECK (desconto >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ------------------------------------------------------------
+--  Novos índices
+-- ------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_pedidos_vendedor ON pedidos(vendedor_id);
+CREATE INDEX IF NOT EXISTS idx_estoque_categoria ON estoque(categoria);
+CREATE INDEX IF NOT EXISTS idx_pedidos_data ON pedidos(data);
+
+-- ------------------------------------------------------------
+--  FUNCTION: cálculo automático de desconto por perfil do cliente
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION calcular_desconto(p_cliente_id INT)
+RETURNS NUMERIC AS $$
+DECLARE
+    desconto NUMERIC := 0;
+    v_torce_flamengo BOOLEAN;
+    v_assiste_one_piece BOOLEAN;
+    v_eh_de_sousa BOOLEAN;
+BEGIN
+    SELECT torce_flamengo, assiste_one_piece, eh_de_sousa
+    INTO v_torce_flamengo, v_assiste_one_piece, v_eh_de_sousa
+    FROM clientes
+    WHERE id = p_cliente_id AND ativo = TRUE;
+
+    IF NOT FOUND THEN
+        RETURN 0;
+    END IF;
+
+    IF v_torce_flamengo THEN desconto := desconto + 5; END IF;
+    IF v_assiste_one_piece THEN desconto := desconto + 5; END IF;
+    IF v_eh_de_sousa THEN desconto := desconto + 5; END IF;
+
+    RETURN desconto;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ------------------------------------------------------------
+--  VIEW: vendas mensais por vendedor
+-- ------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_vendas_por_vendedor AS
+SELECT
+    u.id AS vendedor_id,
+    u.nome AS vendedor_nome,
+    DATE_TRUNC('month', p.data)::DATE AS mes,
+    COUNT(*) AS total_pedidos,
+    SUM(p.valor) AS valor_total,
+    SUM(p.desconto) AS desconto_total,
+    SUM(CASE WHEN p.status_pagamento = 'CONFIRMADO' THEN 1 ELSE 0 END) AS pagamentos_confirmados
+FROM pedidos p
+JOIN usuarios u ON u.id = p.vendedor_id
+GROUP BY u.id, u.nome, DATE_TRUNC('month', p.data)
+ORDER BY mes DESC, valor_total DESC;
+
+-- ------------------------------------------------------------
+--  Seed updates: categorias do estoque e perfis de desconto
+-- ------------------------------------------------------------
+UPDATE estoque SET categoria = 'Salgados' WHERE item ILIKE '%coxinha%' OR item ILIKE '%empada%' OR item ILIKE '%pastel%' OR item ILIKE '%kibe%' OR item ILIKE '%enroladinho%';
+UPDATE estoque SET categoria = 'Bebidas' WHERE item ILIKE '%suco%' OR item ILIKE '%refrigerante%';
+
+UPDATE clientes SET torce_flamengo = TRUE WHERE nome = 'Maria Silva';
+UPDATE clientes SET assiste_one_piece = TRUE WHERE nome = 'João Souza';
+UPDATE clientes SET eh_de_sousa = TRUE, torce_flamengo = TRUE WHERE nome = 'Ana Costa';
