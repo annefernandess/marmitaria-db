@@ -8,11 +8,11 @@ class ClienteRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO clientes (nome, numero, ativo)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO clientes (nome, numero, torce_flamengo, assiste_one_piece, eh_de_sousa, ativo)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (cliente.nome, cliente.numero, cliente.ativo),
+                    (cliente.nome, cliente.numero, cliente.torce_flamengo, cliente.assiste_one_piece, cliente.eh_de_sousa, cliente.ativo),
                 )
                 cliente.id = cur.fetchone()[0]
             conn.commit()
@@ -23,7 +23,7 @@ class ClienteRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, nome, numero, ativo
+                    SELECT id, nome, numero, torce_flamengo, assiste_one_piece, eh_de_sousa, ativo
                     FROM clientes
                     WHERE ativo = TRUE
                     ORDER BY id
@@ -31,14 +31,17 @@ class ClienteRepository:
                 )
                 rows = cur.fetchall()
 
-        return [Cliente(id=row[0], nome=row[1], numero=row[2], ativo=row[3]) for row in rows]
+        return [
+            Cliente(id=r[0], nome=r[1], numero=r[2], torce_flamengo=r[3], assiste_one_piece=r[4], eh_de_sousa=r[5], ativo=r[6])
+            for r in rows
+        ]
 
     def exibir_um(self, cliente_id: int) -> Cliente | None:
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, nome, numero, ativo
+                    SELECT id, nome, numero, torce_flamengo, assiste_one_piece, eh_de_sousa, ativo
                     FROM clientes
                     WHERE id = %s
                     """,
@@ -46,10 +49,10 @@ class ClienteRepository:
                 )
                 row = cur.fetchone()
 
-        if row is None or row[3] is not True:
+        if row is None or row[6] is not True:
             return None
 
-        return Cliente(id=row[0], nome=row[1], numero=row[2], ativo=row[3])
+        return Cliente(id=row[0], nome=row[1], numero=row[2], torce_flamengo=row[3], assiste_one_piece=row[4], eh_de_sousa=row[5], ativo=row[6])
 
     def buscar_por_nome(self, termo: str) -> list[Cliente]:
         like = f"%{termo}%"
@@ -57,7 +60,7 @@ class ClienteRepository:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, nome, numero, ativo
+                    SELECT id, nome, numero, torce_flamengo, assiste_one_piece, eh_de_sousa, ativo
                     FROM clientes
                     WHERE ativo = TRUE AND nome ILIKE %s
                     ORDER BY id
@@ -66,7 +69,10 @@ class ClienteRepository:
                 )
                 rows = cur.fetchall()
 
-        return [Cliente(id=row[0], nome=row[1], numero=row[2], ativo=row[3]) for row in rows]
+        return [
+            Cliente(id=r[0], nome=r[1], numero=r[2], torce_flamengo=r[3], assiste_one_piece=r[4], eh_de_sousa=r[5], ativo=r[6])
+            for r in rows
+        ]
 
     def alterar(self, cliente: Cliente) -> Cliente:
         if cliente.id is None:
@@ -102,11 +108,11 @@ class ClienteRepository:
                 cur.execute(
                     """
                     UPDATE clientes
-                    SET nome = %s, numero = %s
+                    SET nome = %s, numero = %s, torce_flamengo = %s, assiste_one_piece = %s, eh_de_sousa = %s
                     WHERE id = %s AND ativo = TRUE
                     RETURNING id
                     """,
-                    (cliente.nome, cliente.numero, cliente.id),
+                    (cliente.nome, cliente.numero, cliente.torce_flamengo, cliente.assiste_one_piece, cliente.eh_de_sousa, cliente.id),
                 )
                 updated = cur.fetchone()
             conn.commit()

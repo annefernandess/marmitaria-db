@@ -25,7 +25,13 @@ export default function ClientesPage() {
   const [selected, setSelected] = useState<Cliente | null>(null);
   const [editing, setEditing] = useState<Cliente | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ nome: "", numero: "" });
+  const [form, setForm] = useState({
+    nome: "",
+    numero: "",
+    torce_flamengo: false,
+    assiste_one_piece: false,
+    eh_de_sousa: false,
+  });
 
   async function loadClientes(term = searchTerm) {
     try {
@@ -51,20 +57,38 @@ export default function ClientesPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ nome: "", numero: "" });
+    setForm({
+      nome: "",
+      numero: "",
+      torce_flamengo: false,
+      assiste_one_piece: false,
+      eh_de_sousa: false,
+    });
     setShowForm(true);
   }
 
   function openEdit(cliente: Cliente) {
     setEditing(cliente);
-    setForm({ nome: cliente.nome, numero: cliente.numero });
+    setForm({
+      nome: cliente.nome,
+      numero: cliente.numero,
+      torce_flamengo: cliente.torce_flamengo,
+      assiste_one_piece: cliente.assiste_one_piece,
+      eh_de_sousa: cliente.eh_de_sousa,
+    });
     setShowForm(true);
   }
 
   function closeForm() {
     setShowForm(false);
     setEditing(null);
-    setForm({ nome: "", numero: "" });
+    setForm({
+      nome: "",
+      numero: "",
+      torce_flamengo: false,
+      assiste_one_piece: false,
+      eh_de_sousa: false,
+    });
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -177,6 +201,45 @@ export default function ClientesPage() {
             />
           </div>
 
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#F5C451]/20 px-4 py-3 transition-colors hover:bg-[#FFF5E6]/30">
+              <input
+                type="checkbox"
+                checked={form.torce_flamengo}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, torce_flamengo: e.target.checked }))
+                }
+                className="h-4 w-4 rounded accent-[#E85B5B]"
+              />
+              <span className="text-sm text-[#1B2A4A]">Torce pro Flamengo</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#F5C451]/20 px-4 py-3 transition-colors hover:bg-[#FFF5E6]/30">
+              <input
+                type="checkbox"
+                checked={form.assiste_one_piece}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    assiste_one_piece: e.target.checked,
+                  }))
+                }
+                className="h-4 w-4 rounded accent-[#F5A623]"
+              />
+              <span className="text-sm text-[#1B2A4A]">Assiste One Piece</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#F5C451]/20 px-4 py-3 transition-colors hover:bg-[#FFF5E6]/30">
+              <input
+                type="checkbox"
+                checked={form.eh_de_sousa}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, eh_de_sousa: e.target.checked }))
+                }
+                className="h-4 w-4 rounded accent-[#3BB5E8]"
+              />
+              <span className="text-sm text-[#1B2A4A]">De Sousa</span>
+            </label>
+          </div>
+
           <div className="mt-4 flex items-center justify-end gap-3">
             <button
               type="button"
@@ -228,6 +291,23 @@ export default function ClientesPage() {
               <p className="mt-1 text-sm text-[#1B2A4A]/60">
                 Número: {selected.numero}
               </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {selected.torce_flamengo && (
+                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+                    Flamengo
+                  </span>
+                )}
+                {selected.assiste_one_piece && (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
+                    One Piece
+                  </span>
+                )}
+                {selected.eh_de_sousa && (
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                    Sousa
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-[#1B2A4A]/40">ID #{selected.id}</p>
             </div>
             <button
@@ -259,6 +339,9 @@ export default function ClientesPage() {
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
                   Número
                 </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
+                  Descontos
+                </th>
                 <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
                   Ações
                 </th>
@@ -278,6 +361,25 @@ export default function ClientesPage() {
                   </td>
                   <td className="px-6 py-4 text-sm text-[#1B2A4A]/60">
                     {cliente.numero}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {cliente.torce_flamengo && (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+                          Flamengo
+                        </span>
+                      )}
+                      {cliente.assiste_one_piece && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
+                          One Piece
+                        </span>
+                      )}
+                      {cliente.eh_de_sousa && (
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                          Sousa
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">

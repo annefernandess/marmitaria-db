@@ -190,3 +190,41 @@ def test_exibir_um_inativo_ou_inexistente_retorna_none(db, repo):
 
     assert repo.exibir_um(item.id) is None
     assert repo.exibir_um(999999) is None
+
+
+def test_inserir_estoque_com_categoria_e_mari(db, repo):
+    item = repo.inserir(
+        Estoque(item="Bolo de Mari", quantidade_disponivel=10, valor=Decimal("15.00"), categoria="Doces", fabricado_em_mari=True)
+    )
+    recuperado = repo.exibir_um(item.id)
+    assert recuperado.categoria == "Doces"
+    assert recuperado.fabricado_em_mari is True
+
+
+def test_buscar_por_categoria(db, repo):
+    repo.inserir(Estoque(item="Salgado A", quantidade_disponivel=5, valor=Decimal("5.00"), categoria="Salgados"))
+    repo.inserir(Estoque(item="Bebida A", quantidade_disponivel=5, valor=Decimal("3.00"), categoria="Bebidas"))
+    resultado = repo.buscar_por_filtros(categoria="Salgados")
+    assert len(resultado) >= 1
+    assert all(item.categoria == "Salgados" for item in resultado)
+
+
+def test_buscar_por_faixa_preco(db, repo):
+    repo.inserir(Estoque(item="Barato", quantidade_disponivel=5, valor=Decimal("3.00")))
+    repo.inserir(Estoque(item="Caro", quantidade_disponivel=5, valor=Decimal("50.00")))
+    resultado = repo.buscar_por_filtros(valor_min=Decimal("2.00"), valor_max=Decimal("10.00"))
+    assert all(Decimal("2.00") <= item.valor <= Decimal("10.00") for item in resultado)
+
+
+def test_buscar_fabricado_em_mari(db, repo):
+    repo.inserir(Estoque(item="De Mari", quantidade_disponivel=5, valor=Decimal("5.00"), fabricado_em_mari=True))
+    repo.inserir(Estoque(item="Nao de Mari", quantidade_disponivel=5, valor=Decimal("5.00"), fabricado_em_mari=False))
+    resultado = repo.buscar_por_filtros(fabricado_em_mari=True)
+    assert all(item.fabricado_em_mari is True for item in resultado)
+
+
+def test_buscar_estoque_baixo(db, repo):
+    repo.inserir(Estoque(item="Pouco", quantidade_disponivel=3, valor=Decimal("5.00")))
+    repo.inserir(Estoque(item="Muito", quantidade_disponivel=50, valor=Decimal("5.00")))
+    resultado = repo.buscar_por_filtros(estoque_baixo=True)
+    assert all(item.quantidade_disponivel < 5 for item in resultado)

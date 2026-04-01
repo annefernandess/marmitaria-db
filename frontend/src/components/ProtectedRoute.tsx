@@ -16,11 +16,11 @@ export default function ProtectedRoute({
   children,
   allowedRoles,
 }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isHydrating } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isHydrating) return;
 
     if (!user) {
       router.replace("/login");
@@ -34,9 +34,9 @@ export default function ProtectedRoute({
         router.replace("/pedido");
       }
     }
-  }, [user, isLoading, allowedRoles, router]);
+  }, [user, isLoading, isHydrating, allowedRoles, router]);
 
-  if (isLoading || !user) {
+  if (isLoading || isHydrating || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#FFF5E6]">
         <Loader2 className="h-8 w-8 animate-spin text-[#F5A623]" />

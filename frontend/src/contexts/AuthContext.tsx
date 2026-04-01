@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -32,6 +33,7 @@ interface RegisterInput {
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
+  isHydrating: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   register: (input: RegisterInput) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
@@ -70,9 +72,15 @@ function readStoredUser(): User | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => readStoredUser());
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    setUser(readStoredUser());
+    setIsHydrating(false);
+  }, []);
 
   const redirectByRole = useCallback(
     (role: UserRole) => {
@@ -176,7 +184,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, isHydrating, login, register, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

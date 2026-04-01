@@ -89,3 +89,13 @@ def db(monkeypatch):
 
     conn.rollback()
     conn.close()
+
+
+@pytest.fixture
+def vendedor(db):
+    """Retorna o admin seed como vendedor para testes de pedido."""
+    with db.cursor() as cur:
+        cur.execute("SELECT id, nome, email, senha, numero, role FROM usuarios WHERE email = 'yao@lanches.com'")
+        r = cur.fetchone()
+    from app.models.usuario import Usuario
+    return Usuario(id=r[0], nome=r[1], email=r[2], senha=r[3], numero=r[4], role=r[5])

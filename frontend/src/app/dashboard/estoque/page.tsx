@@ -29,15 +29,22 @@ export default function EstoquePage() {
     item: "",
     quantidade_disponivel: "0",
     valor: "0",
+    categoria: "Geral",
+    fabricado_em_mari: false,
   });
+  const [filterCategoria, setFilterCategoria] = useState("");
+  const [filterEstoqueBaixo, setFilterEstoqueBaixo] = useState(false);
 
   async function loadEstoque(term = searchTerm) {
     try {
       setLoading(true);
       setError(null);
-      const data = await apiFetch<EstoqueItem[]>("/estoque", {
-        query: { nome: term || undefined },
-      });
+      const query: Record<string, string | undefined> = {
+        nome: term || undefined,
+      };
+      if (filterCategoria) query.categoria = filterCategoria;
+      if (filterEstoqueBaixo) query.estoque_baixo = "true";
+      const data = await apiFetch<EstoqueItem[]>("/estoque", { query });
       setEstoque(data);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -49,13 +56,19 @@ export default function EstoquePage() {
   useEffect(() => {
     void loadEstoque();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm]);
+  }, [searchTerm, filterCategoria, filterEstoqueBaixo]);
 
   const filtered = useMemo(() => estoque, [estoque]);
 
   function openCreate() {
     setEditing(null);
-    setForm({ item: "", quantidade_disponivel: "0", valor: "0" });
+    setForm({
+      item: "",
+      quantidade_disponivel: "0",
+      valor: "0",
+      categoria: "Geral",
+      fabricado_em_mari: false,
+    });
     setShowForm(true);
   }
 
@@ -65,6 +78,8 @@ export default function EstoquePage() {
       item: item.item,
       quantidade_disponivel: String(item.quantidade_disponivel),
       valor: String(item.valor),
+      categoria: item.categoria ?? "Geral",
+      fabricado_em_mari: item.fabricado_em_mari ?? false,
     });
     setShowForm(true);
   }
@@ -72,7 +87,13 @@ export default function EstoquePage() {
   function closeForm() {
     setShowForm(false);
     setEditing(null);
-    setForm({ item: "", quantidade_disponivel: "0", valor: "0" });
+    setForm({
+      item: "",
+      quantidade_disponivel: "0",
+      valor: "0",
+      categoria: "Geral",
+      fabricado_em_mari: false,
+    });
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -86,6 +107,8 @@ export default function EstoquePage() {
         item: form.item,
         quantidade_disponivel: Number(form.quantidade_disponivel),
         valor: Number(form.valor),
+        categoria: form.categoria,
+        fabricado_em_mari: form.fabricado_em_mari,
       };
 
       if (editing) {
@@ -236,6 +259,45 @@ export default function EstoquePage() {
             </div>
           </div>
 
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label
+                htmlFor="categoria"
+                className="mb-2 block text-xs font-medium uppercase tracking-wider text-[#1B2A4A]/40"
+              >
+                Categoria
+              </label>
+              <select
+                id="categoria"
+                value={form.categoria}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, categoria: e.target.value }))
+                }
+                className="w-full rounded-xl border border-[#F5C451]/20 bg-white px-4 py-3 text-sm text-[#1B2A4A] outline-none transition-all focus:border-[#F5A623]/30 focus:ring-2 focus:ring-[#F5A623]/10"
+              >
+                <option value="Geral">Geral</option>
+                <option value="Salgados">Salgados</option>
+                <option value="Bebidas">Bebidas</option>
+                <option value="Doces">Doces</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
+            <label className="flex cursor-pointer items-center gap-3 self-end rounded-xl border border-[#F5C451]/20 px-4 py-3 transition-colors hover:bg-[#FFF5E6]/30">
+              <input
+                type="checkbox"
+                checked={form.fabricado_em_mari}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    fabricado_em_mari: e.target.checked,
+                  }))
+                }
+                className="h-4 w-4 rounded accent-[#3BB5E8]"
+              />
+              <span className="text-sm text-[#1B2A4A]">Fabricado em Mari</span>
+            </label>
+          </div>
+
           <div className="mt-4 flex items-center justify-end gap-3">
             <button
               type="button"
@@ -274,6 +336,30 @@ export default function EstoquePage() {
         />
       </div>
 
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <select
+          value={filterCategoria}
+          onChange={(e) => setFilterCategoria(e.target.value)}
+          className="rounded-xl border border-[#F5C451]/20 bg-white px-3 py-2 text-sm text-[#1B2A4A] outline-none"
+        >
+          <option value="">Todas categorias</option>
+          <option value="Salgados">Salgados</option>
+          <option value="Bebidas">Bebidas</option>
+          <option value="Doces">Doces</option>
+          <option value="Geral">Geral</option>
+          <option value="Outros">Outros</option>
+        </select>
+        <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-[#F5C451]/20 bg-white px-3 py-2 text-sm text-[#1B2A4A]">
+          <input
+            type="checkbox"
+            checked={filterEstoqueBaixo}
+            onChange={(e) => setFilterEstoqueBaixo(e.target.checked)}
+            className="h-4 w-4 rounded accent-[#E85B5B]"
+          />
+          {"Estoque baixo (< 5)"}
+        </label>
+      </div>
+
       {selected && (
         <div className="mb-6 rounded-2xl border border-[#3BB5E8]/20 bg-[#3BB5E8]/5 p-5">
           <div className="flex items-start justify-between gap-4">
@@ -286,6 +372,12 @@ export default function EstoquePage() {
               </h2>
               <p className="mt-1 text-sm text-[#1B2A4A]/60">
                 Disponível: {selected.quantidade_disponivel}
+              </p>
+              <p className="text-sm text-[#1B2A4A]/60">
+                Categoria: {selected.categoria ?? "Geral"}
+              </p>
+              <p className="text-sm text-[#1B2A4A]/60">
+                Fabricado em Mari: {selected.fabricado_em_mari ? "Sim" : "Não"}
               </p>
               <p className="text-sm text-[#1B2A4A]/60">
                 Valor: {formatCurrency(selected.valor)}
@@ -319,6 +411,9 @@ export default function EstoquePage() {
                   Item
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
+                  Categoria
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
                   Qtd. Disponível
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-[#1B2A4A]/40">
@@ -340,6 +435,16 @@ export default function EstoquePage() {
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-[#1B2A4A]">
                     {item.item}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-[#1B2A4A]/60">
+                    <span className="inline-flex items-center gap-1">
+                      {item.categoria ?? "Geral"}
+                      {item.fabricado_em_mari && (
+                        <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                          Mari
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <span
